@@ -1,6 +1,8 @@
 package com.stopsopa.musicfilter;
 
 import javafx.application.Platform;
+import javafx.beans.property.ObjectProperty;
+import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.MapChangeListener;
 import javafx.geometry.Insets;
@@ -11,6 +13,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.Slider;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
+import javafx.scene.control.TableRow;
 import javafx.scene.input.DragEvent;
 import javafx.scene.input.Dragboard;
 import javafx.scene.input.KeyCode;
@@ -23,14 +26,11 @@ import javafx.scene.media.Media;
 import javafx.scene.media.MediaPlayer;
 import javafx.stage.Stage;
 import javafx.util.Duration;
-import javafx.beans.property.BooleanProperty;
-import javafx.beans.property.SimpleBooleanProperty;
-import javafx.scene.control.TableRow;
+
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
-
-import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -45,32 +45,24 @@ public class MusicController {
     private Duration duration;
 
     public static class Mp3File {
-        private final File originalFile;
-        private final File deletedFile;
+        private final ObjectProperty<File> file;
         private final SimpleStringProperty filename;
         private final SimpleStringProperty title;
         private final SimpleStringProperty artist;
         private final SimpleStringProperty album;
-        private final BooleanProperty deleted;
 
         public Mp3File(File file) {
-            this.originalFile = file;
-            // _deleted folder in the same directory
-            File parent = file.getParentFile();
-            File deletedDir = new File(parent, "_deleted");
-            this.deletedFile = new File(deletedDir, file.getName());
-
+            this.file = new SimpleObjectProperty<>(file);
             this.filename = new SimpleStringProperty(file.getName());
             this.title = new SimpleStringProperty("");
             this.artist = new SimpleStringProperty("");
             this.album = new SimpleStringProperty("");
-            this.deleted = new SimpleBooleanProperty(false);
             loadMetadata();
         }
 
         private void loadMetadata() {
             try {
-                Media media = new Media(originalFile.toURI().toString());
+                Media media = new Media(file.get().toURI().toString());
                 media.getMetadata().addListener((MapChangeListener<String, Object>) change -> {
                     if (change.wasAdded()) {
                         String key = change.getKey();
@@ -89,15 +81,15 @@ public class MusicController {
         }
 
         public File getFile() {
-            return deleted.get() ? deletedFile : originalFile;
+            return file.get();
         }
 
-        public File getOriginalFile() {
-            return originalFile;
+        public ObjectProperty<File> fileProperty() {
+            return file;
         }
 
-        public File getDeletedFile() {
-            return deletedFile;
+        public void setFile(File file) {
+            this.file.set(file);
         }
 
         public String getFilename() {
@@ -116,16 +108,8 @@ public class MusicController {
             return album.get();
         }
 
-        public BooleanProperty deletedProperty() {
-            return deleted;
-        }
-
         public boolean isDeleted() {
-            return deleted.get();
-        }
-
-        public void setDeleted(boolean deleted) {
-            this.deleted.set(deleted);
+            return file.get().getParentFile().getName().equals("_deleted");
         }
     }
 
@@ -157,12 +141,18 @@ public class MusicController {
                     setStyle("");
                     setOpacity(1.0);
                 } else {
-                    // Bind opacity to deleted property
-                    item.deletedProperty().addListener((obs, wasDeleted, isDeleted) -> {
-                        setOpacity(isDeleted ? 0.5 : 1.0);
+                    // Update opacity based on isDeleted state
+                    updateOpacity(item);
+
+                    // Listen for file path changes to update opacity dynamically
+                    item.fileProperty().addListener((obs, oldFile, newFile) -> {
+                        updateOpacity(item);
                     });
-                    setOpacity(item.isDeleted() ? 0.5 : 1.0);
                 }
+            }
+
+            private void updateOpacity(Mp3File item) {
+                setOpacity(item.isDeleted() ? 0.5 : 1.0);
             }
         });
 
@@ -272,11 +262,10 @@ public class MusicController {
         if (mediaPlayer != null) {
             mediaPlayer.stop();
             mediaPlayer.dispose();
+            mediaPlayer = null;
         }
 
-        if (mp3File.isDeleted()) {
-            return;
-        }
+        // Allow playing deleted files as requested
 
         try {
             Media media = new Media(mp3File.getFile().toURI().toString());
@@ -408,8 +397,7 @@ public class MusicController {
     private void softDeleteFile(Mp3File item) {
         try {
             // Stop playback if playing this file
-            if (mediaPlayer != null
-                    && mediaPlayer.getMedia().getSource().contains(item.getOriginalFile().toURI().toString())) {
+            if (mediaPlayer != null && mediaPlayer.getMedia().getSource().contains(item.getFile().toURI().toString())) {
                 mediaPlayer.stop();
                 mediaPlayer.dispose();
                 mediaPlayer = null;
@@ -418,18 +406,22 @@ public class MusicController {
                 timeSlider.setValue(0);
             }
 
-            File original = item.getOriginalFile();
-            File deleted = item.getDeletedFile();
+            File original = item.getFile();
+            File parent = original.getParentFile();
+            File deletedDir = new File(parent, "_deleted");
 
             // Create _deleted directory if needed
-            if (!deleted.getParentFile().exists()) {
-                deleted.getParentFile().mkdirs();
+            if (!deletedDir.exists()) {
+                deletedDir.mkdirs();
             }
+
+            File deleted = new File(deletedDir, original.getName());
 
             // Move file
             Files.move(original.toPath(), deleted.toPath(), StandardCopyOption.REPLACE_EXISTING);
 
-            item.setDeleted(true);
+            // Update item state
+            item.setFile(deleted);
             System.out.println("Soft deleted: " + original.getName());
 
             // Select next item
@@ -446,12 +438,16 @@ public class MusicController {
 
     private void restoreFile(Mp3File item) {
         try {
-            File original = item.getOriginalFile();
-            File deleted = item.getDeletedFile();
+            File deleted = item.getFile();
+            File deletedDir = deleted.getParentFile();
+            File parent = deletedDir.getParentFile();
+            File original = new File(parent, deleted.getName());
 
             if (deleted.exists()) {
                 Files.move(deleted.toPath(), original.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                item.setDeleted(false);
+
+                // Update item state
+                item.setFile(original);
                 System.out.println("Restored: " + original.getName());
             }
         } catch (IOException e) {
