@@ -12,7 +12,7 @@ public class App extends Application {
         MusicController controller = new MusicController(stage);
 
         StackPane root = new StackPane(controller.getView());
-        Scene scene = new Scene(root, 640, 480);
+        Scene scene = new Scene(root, 1060, 800);
 
         // Handle Drag and Drop on the Scene
         scene.setOnDragOver(controller::handleDragOver);

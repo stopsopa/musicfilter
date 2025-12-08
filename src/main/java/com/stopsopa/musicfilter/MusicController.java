@@ -23,10 +23,11 @@ import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.media.Media;
-import javafx.scene.media.MediaPlayer;
 import javafx.stage.Stage;
 import javafx.util.Duration;
 
+import javax.sound.sampled.AudioFileFormat;
+import javax.sound.sampled.AudioSystem;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -38,7 +39,7 @@ import java.util.Map;
 public class MusicController {
 
     private final TableView<AudioFile> tableView;
-    private MediaPlayer mediaPlayer;
+    private AudioPlayer audioPlayer;
     private final Slider timeSlider;
     private final Button playPauseButton;
     private final Label timeLabel;
@@ -62,36 +63,62 @@ public class MusicController {
         }
 
         private void loadMetadata() {
-            try {
-                Media media = new Media(file.get().toURI().toString());
-                media.getMetadata().addListener((MapChangeListener<String, Object>) change -> {
-                    if (change.wasAdded()) {
-                        updateMetadata(media.getMetadata());
+            File f = file.get();
+            String name = f.getName().toLowerCase();
+
+            if (isJavaFXSupported(name)) {
+                try {
+                    Media media = new Media(f.toURI().toString());
+                    media.getMetadata().addListener((MapChangeListener<String, Object>) change -> {
+                        if (change.wasAdded()) {
+                            updateMetadata(media.getMetadata());
+                        }
+                    });
+                } catch (Exception e) {
+                    // Ignore
+                }
+            } else {
+                // Try JavaSound properties for FLAC/OGG
+                new Thread(() -> {
+                    try {
+                        AudioFileFormat aff = AudioSystem.getAudioFileFormat(f);
+                        if (aff instanceof TAudioFileFormat) {
+                            Map<String, Object> props = ((TAudioFileFormat) aff).properties();
+                            updateMetadata(props);
+                        }
+                    } catch (Exception e) {
+                        // Ignore
                     }
-                });
-            } catch (Exception e) {
-                // Ignore metadata errors, keep default values
+                }).start();
             }
+        }
+
+        private boolean isJavaFXSupported(String name) {
+            return name.endsWith(".mp3") || name.endsWith(".wav") ||
+                    name.endsWith(".aif") || name.endsWith(".aiff") ||
+                    name.endsWith(".m4a") || name.endsWith(".aac");
         }
 
         private void updateMetadata(Map<String, Object> metadata) {
             Platform.runLater(() -> {
                 title.set(extractMetadata(metadata, "title"));
-                artist.set(extractMetadata(metadata, "artist"));
+                artist.set(extractMetadata(metadata, "artist", "author")); // fallback to author
                 album.set(extractMetadata(metadata, "album"));
             });
         }
 
-        private String extractMetadata(Map<String, Object> metadata, String key) {
+        private String extractMetadata(Map<String, Object> metadata, String... keys) {
             try {
-                if (metadata.containsKey(key)) {
-                    Object value = metadata.get(key);
-                    if (value != null && !value.toString().trim().isEmpty()) {
-                        return value.toString();
+                for (String key : keys) {
+                    if (metadata.containsKey(key)) {
+                        Object value = metadata.get(key);
+                        if (value != null && !value.toString().trim().isEmpty()) {
+                            return value.toString();
+                        }
                     }
                 }
             } catch (Exception e) {
-                // Fallback on error
+                // Fallback
             }
             return "<not available>";
         }
@@ -127,6 +154,11 @@ public class MusicController {
         public boolean isDeleted() {
             return file.get().getParentFile().getName().equals("_deleted");
         }
+
+        // Helper interface for Tritonus properties
+        private interface TAudioFileFormat {
+            Map<String, Object> properties();
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -148,7 +180,6 @@ public class MusicController {
         tableView.getColumns().addAll(filenameCol, titleCol, artistCol, albumCol);
         tableView.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
 
-        // Row Factory for graying out deleted items
         tableView.setRowFactory(tv -> new TableRow<>() {
             @Override
             protected void updateItem(AudioFile item, boolean empty) {
@@ -157,13 +188,8 @@ public class MusicController {
                     setStyle("");
                     setOpacity(1.0);
                 } else {
-                    // Update opacity based on isDeleted state
                     updateOpacity(item);
-
-                    // Listen for file path changes to update opacity dynamically
-                    item.fileProperty().addListener((obs, oldFile, newFile) -> {
-                        updateOpacity(item);
-                    });
+                    item.fileProperty().addListener((obs, oldFile, newFile) -> updateOpacity(item));
                 }
             }
 
@@ -172,14 +198,12 @@ public class MusicController {
             }
         });
 
-        // Handle selection change to play music
         tableView.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
             if (newValue != null) {
                 playFile(newValue);
             }
         });
 
-        // Controls
         timeSlider = new Slider();
         HBox.setHgrow(timeSlider, Priority.ALWAYS);
         timeSlider.setMinWidth(50);
@@ -190,18 +214,17 @@ public class MusicController {
 
         timeLabel = new Label("00:00 / 00:00");
 
-        // Slider listeners
         timeSlider.valueProperty().addListener((obs, oldVal, newVal) -> {
-            if (isSliderDragging && mediaPlayer != null) {
-                mediaPlayer.seek(duration.multiply(timeSlider.getValue() / 100.0));
+            if (isSliderDragging && audioPlayer != null) {
+                audioPlayer.seek(duration.multiply(timeSlider.getValue() / 100.0));
             }
         });
 
         timeSlider.setOnMousePressed(e -> isSliderDragging = true);
         timeSlider.setOnMouseReleased(e -> {
             isSliderDragging = false;
-            if (mediaPlayer != null) {
-                mediaPlayer.seek(duration.multiply(timeSlider.getValue() / 100.0));
+            if (audioPlayer != null) {
+                audioPlayer.seek(duration.multiply(timeSlider.getValue() / 100.0));
             }
         });
     }
@@ -243,7 +266,15 @@ public class MusicController {
                 }
             }
 
+            // audioFiles.sort((a, b) -> a.getFilename().compareTo(b.getFilename()));
+
             tableView.getItems().addAll(audioFiles);
+
+            // Apply sorting on drop
+            tableView.getSortOrder().clear();
+            tableView.getSortOrder().add(tableView.getColumns().get(0)); // Filename column
+            tableView.getColumns().get(0).setSortType(TableColumn.SortType.ASCENDING);
+            tableView.sort();
             success = true;
         }
         event.setDropCompleted(success);
@@ -277,37 +308,52 @@ public class MusicController {
                 name.endsWith(".aif") ||
                 name.endsWith(".aiff") ||
                 name.endsWith(".m4a") ||
-                name.endsWith(".aac");
+                name.endsWith(".aac") ||
+                name.endsWith(".flac") ||
+                name.endsWith(".ogg");
     }
 
     private void playFile(AudioFile audioFile) {
-        if (mediaPlayer != null) {
-            mediaPlayer.stop();
-            mediaPlayer.dispose();
-            mediaPlayer = null;
+        if (audioPlayer != null) {
+            audioPlayer.stop();
+            audioPlayer.dispose();
+            audioPlayer = null;
         }
 
         // Allow playing deleted files as requested
 
         try {
-            Media media = new Media(audioFile.getFile().toURI().toString());
-            mediaPlayer = new MediaPlayer(media);
-            mediaPlayer.setOnError(() -> System.err.println("Media error: " + mediaPlayer.getError()));
+            File file = audioFile.getFile();
+            String name = file.getName().toLowerCase();
 
-            mediaPlayer.currentTimeProperty().addListener((obs, oldTime, newTime) -> updateValues());
-            mediaPlayer.setOnReady(() -> {
-                duration = mediaPlayer.getMedia().getDuration();
+            System.out.println("Attempting to play: " + name);
+            if (name.endsWith(".flac") || name.endsWith(".ogg") || name.endsWith(".aac")) {
+                System.out.println("Using JavaSoundAudioPlayer");
+                audioPlayer = new JavaSoundAudioPlayer(file);
+            } else {
+                System.out.println("Using JavaFXAudioPlayer");
+                audioPlayer = new JavaFXAudioPlayer(file);
+            }
+
+            audioPlayer.setOnError(() -> System.err.println("Media error reported by player"));
+
+            audioPlayer.currentTimeProperty().addListener((obs, oldTime, newTime) -> updateValues());
+            audioPlayer.totalDurationProperty().addListener((obs, oldDur, newDur) -> {
+                duration = newDur;
                 updateValues();
             });
-            mediaPlayer.setOnEndOfMedia(() -> {
-                // Auto play next
+
+            // Initial duration might be available immediately or later
+            duration = audioPlayer.totalDurationProperty().getValue();
+
+            audioPlayer.setOnEndOfMedia(() -> {
                 int nextIndex = tableView.getSelectionModel().getSelectedIndex() + 1;
                 if (nextIndex < tableView.getItems().size()) {
                     tableView.getSelectionModel().select(nextIndex);
                 }
             });
 
-            mediaPlayer.play();
+            audioPlayer.play();
             playPauseButton.setText("||");
         } catch (Exception e) {
             System.err.println("Error playing file: " + audioFile.getFile().getAbsolutePath());
@@ -316,22 +362,23 @@ public class MusicController {
     }
 
     private void togglePlayPause() {
-        if (mediaPlayer == null)
+        if (audioPlayer == null)
             return;
 
-        if (mediaPlayer.getStatus() == MediaPlayer.Status.PLAYING) {
-            mediaPlayer.pause();
+        if (audioPlayer.statusProperty().get() == AudioPlayer.Status.PLAYING) {
+            audioPlayer.pause();
             playPauseButton.setText(">");
         } else {
-            mediaPlayer.play();
+            audioPlayer.play();
             playPauseButton.setText("||");
         }
     }
 
     private void updateValues() {
-        if (timeLabel != null && timeSlider != null && duration != null && mediaPlayer != null) {
+        if (timeLabel != null && timeSlider != null && duration != null && audioPlayer != null) {
             Platform.runLater(() -> {
-                Duration currentTime = mediaPlayer.getCurrentTime();
+                Duration currentTime = audioPlayer.currentTimeProperty().getValue();
+
                 timeLabel.setText(formatTime(currentTime, duration));
                 timeSlider.setDisable(duration.isUnknown());
                 if (!timeSlider.isDisabled() && duration.greaterThan(Duration.ZERO) && !isSliderDragging) {
@@ -342,6 +389,11 @@ public class MusicController {
     }
 
     private static String formatTime(Duration elapsed, Duration duration) {
+        if (elapsed == null)
+            elapsed = Duration.ZERO;
+        if (duration == null)
+            duration = Duration.UNKNOWN;
+
         int intElapsed = (int) Math.floor(elapsed.toSeconds());
         int elapsedHours = intElapsed / (60 * 60);
         if (elapsedHours > 0) {
@@ -399,8 +451,8 @@ public class MusicController {
     }
 
     private void seek(double seconds) {
-        if (mediaPlayer != null) {
-            mediaPlayer.seek(mediaPlayer.getCurrentTime().add(Duration.seconds(seconds)));
+        if (audioPlayer != null) {
+            audioPlayer.seek(audioPlayer.currentTimeProperty().getValue().add(Duration.seconds(seconds)));
         }
     }
 
@@ -419,10 +471,11 @@ public class MusicController {
     private void softDeleteFile(AudioFile item) {
         try {
             // Stop playback if playing this file
-            if (mediaPlayer != null && mediaPlayer.getMedia().getSource().contains(item.getFile().toURI().toString())) {
-                mediaPlayer.stop();
-                mediaPlayer.dispose();
-                mediaPlayer = null;
+            if (audioPlayer != null
+                    && item.getFile().equals(tableView.getSelectionModel().getSelectedItem().getFile())) {
+                audioPlayer.stop();
+                audioPlayer.dispose();
+                audioPlayer = null;
                 playPauseButton.setText(">");
                 timeLabel.setText("00:00 / 00:00");
                 timeSlider.setValue(0);
@@ -432,21 +485,16 @@ public class MusicController {
             File parent = original.getParentFile();
             File deletedDir = new File(parent, "_deleted");
 
-            // Create _deleted directory if needed
             if (!deletedDir.exists()) {
                 deletedDir.mkdirs();
             }
 
             File deleted = new File(deletedDir, original.getName());
-
-            // Move file
             Files.move(original.toPath(), deleted.toPath(), StandardCopyOption.REPLACE_EXISTING);
 
-            // Update item state
             item.setFile(deleted);
             System.out.println("Soft deleted: " + original.getName());
 
-            // Select next item
             int selectedIndex = tableView.getSelectionModel().getSelectedIndex();
             if (selectedIndex < tableView.getItems().size() - 1) {
                 tableView.getSelectionModel().select(selectedIndex + 1);
@@ -467,8 +515,6 @@ public class MusicController {
 
             if (deleted.exists()) {
                 Files.move(deleted.toPath(), original.toPath(), StandardCopyOption.REPLACE_EXISTING);
-
-                // Update item state
                 item.setFile(original);
                 System.out.println("Restored: " + original.getName());
             }

@@ -15,6 +15,8 @@ The application supports the following audio formats:
 - WAV (`.wav`)
 - AIFF (`.aif`, `.aiff`)
 - AAC (`.m4a`, `.aac`)
+- FLAC (`.flac`)
+- OGG (`.ogg`)
 
 Note: Metadata (Title, Artist, Album) extraction depends on the file format and tags. If metadata is not available, it will display `<not available>`.
 
