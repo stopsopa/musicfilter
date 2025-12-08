@@ -23,8 +23,13 @@ import javafx.scene.media.Media;
 import javafx.scene.media.MediaPlayer;
 import javafx.stage.Stage;
 import javafx.util.Duration;
+import javafx.beans.property.BooleanProperty;
+import javafx.beans.property.SimpleBooleanProperty;
+import javafx.scene.control.TableRow;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 
-import java.awt.Desktop;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
@@ -40,24 +45,32 @@ public class MusicController {
     private Duration duration;
 
     public static class Mp3File {
-        private final File file;
+        private final File originalFile;
+        private final File deletedFile;
         private final SimpleStringProperty filename;
         private final SimpleStringProperty title;
         private final SimpleStringProperty artist;
         private final SimpleStringProperty album;
+        private final BooleanProperty deleted;
 
         public Mp3File(File file) {
-            this.file = file;
+            this.originalFile = file;
+            // _deleted folder in the same directory
+            File parent = file.getParentFile();
+            File deletedDir = new File(parent, "_deleted");
+            this.deletedFile = new File(deletedDir, file.getName());
+
             this.filename = new SimpleStringProperty(file.getName());
             this.title = new SimpleStringProperty("");
             this.artist = new SimpleStringProperty("");
             this.album = new SimpleStringProperty("");
+            this.deleted = new SimpleBooleanProperty(false);
             loadMetadata();
         }
 
         private void loadMetadata() {
             try {
-                Media media = new Media(file.toURI().toString());
+                Media media = new Media(originalFile.toURI().toString());
                 media.getMetadata().addListener((MapChangeListener<String, Object>) change -> {
                     if (change.wasAdded()) {
                         String key = change.getKey();
@@ -76,7 +89,15 @@ public class MusicController {
         }
 
         public File getFile() {
-            return file;
+            return deleted.get() ? deletedFile : originalFile;
+        }
+
+        public File getOriginalFile() {
+            return originalFile;
+        }
+
+        public File getDeletedFile() {
+            return deletedFile;
         }
 
         public String getFilename() {
@@ -93,6 +114,18 @@ public class MusicController {
 
         public String getAlbum() {
             return album.get();
+        }
+
+        public BooleanProperty deletedProperty() {
+            return deleted;
+        }
+
+        public boolean isDeleted() {
+            return deleted.get();
+        }
+
+        public void setDeleted(boolean deleted) {
+            this.deleted.set(deleted);
         }
     }
 
@@ -115,10 +148,28 @@ public class MusicController {
         tableView.getColumns().addAll(filenameCol, titleCol, artistCol, albumCol);
         tableView.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
 
+        // Row Factory for graying out deleted items
+        tableView.setRowFactory(tv -> new TableRow<>() {
+            @Override
+            protected void updateItem(Mp3File item, boolean empty) {
+                super.updateItem(item, empty);
+                if (item == null || empty) {
+                    setStyle("");
+                    setOpacity(1.0);
+                } else {
+                    // Bind opacity to deleted property
+                    item.deletedProperty().addListener((obs, wasDeleted, isDeleted) -> {
+                        setOpacity(isDeleted ? 0.5 : 1.0);
+                    });
+                    setOpacity(item.isDeleted() ? 0.5 : 1.0);
+                }
+            }
+        });
+
         // Handle selection change to play music
         tableView.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
             if (newValue != null) {
-                playFile(newValue.getFile());
+                playFile(newValue);
             }
         });
 
@@ -195,6 +246,11 @@ public class MusicController {
 
     private List<Mp3File> findMp3sInDirectory(File dir) {
         List<Mp3File> mp3s = new ArrayList<>();
+        // Skip _deleted directories
+        if (dir.getName().equals("_deleted")) {
+            return mp3s;
+        }
+
         File[] files = dir.listFiles();
         if (files != null) {
             for (File file : files) {
@@ -212,14 +268,18 @@ public class MusicController {
         return file.getName().toLowerCase().endsWith(".mp3");
     }
 
-    private void playFile(File file) {
+    private void playFile(Mp3File mp3File) {
         if (mediaPlayer != null) {
             mediaPlayer.stop();
             mediaPlayer.dispose();
         }
 
+        if (mp3File.isDeleted()) {
+            return;
+        }
+
         try {
-            Media media = new Media(file.toURI().toString());
+            Media media = new Media(mp3File.getFile().toURI().toString());
             mediaPlayer = new MediaPlayer(media);
             mediaPlayer.setOnError(() -> System.err.println("Media error: " + mediaPlayer.getError()));
 
@@ -239,7 +299,7 @@ public class MusicController {
             mediaPlayer.play();
             playPauseButton.setText("||");
         } catch (Exception e) {
-            System.err.println("Error playing file: " + file.getAbsolutePath());
+            System.err.println("Error playing file: " + mp3File.getFile().getAbsolutePath());
             e.printStackTrace();
         }
     }
@@ -315,22 +375,14 @@ public class MusicController {
             seek(3);
             event.consume();
         } else if (event.getCode() == KeyCode.BACK_SPACE) {
-            deleteCurrentSong();
+            handleBackspace();
             event.consume();
         } else if (event.getCode() == KeyCode.SPACE) {
             togglePlayPause();
             event.consume();
         } else if (event.getCode() == KeyCode.UP || event.getCode() == KeyCode.DOWN) {
-            // Let TableView handle navigation, but ensure focus is there if needed
-            // However, since we are using an event filter on Scene, we should be careful
-            // not to consume
-            // UP/DOWN if the TableView needs them.
-            // Actually, if focus is elsewhere, we might want to manually move selection.
-            // But standard behavior is usually sufficient if TableView has focus.
-            // If user wants UP/DOWN to work GLOBALLY even if focus is on slider:
             if (!tableView.isFocused()) {
                 tableView.requestFocus();
-                // We don't consume here so TableView can process it after getting focus
             }
         }
     }
@@ -341,61 +393,70 @@ public class MusicController {
         }
     }
 
-    private void deleteCurrentSong() {
+    private void handleBackspace() {
         Mp3File selectedItem = tableView.getSelectionModel().getSelectedItem();
-        int selectedIndex = tableView.getSelectionModel().getSelectedIndex();
+        if (selectedItem == null)
+            return;
 
-        if (selectedItem != null) {
-            File selectedFile = selectedItem.getFile();
-            // Stop playback
-            if (mediaPlayer != null) {
-                mediaPlayer.stop();
-                mediaPlayer.dispose();
-                mediaPlayer = null; // Ensure we don't hold a reference
-            }
-
-            playPauseButton.setText(">");
-            timeLabel.setText("00:00 / 00:00");
-            timeSlider.setValue(0);
-
-            // Remove from list
-            tableView.getItems().remove(selectedItem);
-
-            // Select next item if available, or previous
-            if (!tableView.getItems().isEmpty()) {
-                if (selectedIndex < tableView.getItems().size()) {
-                    tableView.getSelectionModel().select(selectedIndex);
-                } else {
-                    tableView.getSelectionModel().select(tableView.getItems().size() - 1);
-                }
-            }
-
-            // Delete file
-            moveToTrashOrDelete(selectedFile);
+        if (selectedItem.isDeleted()) {
+            restoreFile(selectedItem);
+        } else {
+            softDeleteFile(selectedItem);
         }
     }
 
-    private void moveToTrashOrDelete(File file) {
+    private void softDeleteFile(Mp3File item) {
         try {
-            if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.MOVE_TO_TRASH)) {
-                if (Desktop.getDesktop().moveToTrash(file)) {
-                    System.out.println("Moved to trash: " + file.getName());
-                    return;
-                }
+            // Stop playback if playing this file
+            if (mediaPlayer != null
+                    && mediaPlayer.getMedia().getSource().contains(item.getOriginalFile().toURI().toString())) {
+                mediaPlayer.stop();
+                mediaPlayer.dispose();
+                mediaPlayer = null;
+                playPauseButton.setText(">");
+                timeLabel.setText("00:00 / 00:00");
+                timeSlider.setValue(0);
             }
-        } catch (Exception e) {
-            System.err.println("Failed to move to trash: " + e.getMessage());
-        }
 
-        // Fallback to permanent delete
-        try {
-            if (file.delete()) {
-                System.out.println("Deleted permanently: " + file.getName());
-            } else {
-                System.err.println("Failed to delete: " + file.getName());
+            File original = item.getOriginalFile();
+            File deleted = item.getDeletedFile();
+
+            // Create _deleted directory if needed
+            if (!deleted.getParentFile().exists()) {
+                deleted.getParentFile().mkdirs();
             }
-        } catch (Exception e) {
-            System.err.println("Error deleting file: " + e.getMessage());
+
+            // Move file
+            Files.move(original.toPath(), deleted.toPath(), StandardCopyOption.REPLACE_EXISTING);
+
+            item.setDeleted(true);
+            System.out.println("Soft deleted: " + original.getName());
+
+            // Select next item
+            int selectedIndex = tableView.getSelectionModel().getSelectedIndex();
+            if (selectedIndex < tableView.getItems().size() - 1) {
+                tableView.getSelectionModel().select(selectedIndex + 1);
+            }
+
+        } catch (IOException e) {
+            System.err.println("Failed to soft delete: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    private void restoreFile(Mp3File item) {
+        try {
+            File original = item.getOriginalFile();
+            File deleted = item.getDeletedFile();
+
+            if (deleted.exists()) {
+                Files.move(deleted.toPath(), original.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                item.setDeleted(false);
+                System.out.println("Restored: " + original.getName());
+            }
+        } catch (IOException e) {
+            System.err.println("Failed to restore: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 }
