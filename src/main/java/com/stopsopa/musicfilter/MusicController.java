@@ -1,13 +1,16 @@
 package com.stopsopa.musicfilter;
 
 import javafx.application.Platform;
+import javafx.beans.property.SimpleStringProperty;
+import javafx.collections.MapChangeListener;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Parent;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
-import javafx.scene.control.ListView;
 import javafx.scene.control.Slider;
+import javafx.scene.control.TableColumn;
+import javafx.scene.control.TableView;
 import javafx.scene.input.DragEvent;
 import javafx.scene.input.Dragboard;
 import javafx.scene.input.KeyCode;
@@ -28,8 +31,7 @@ import java.util.List;
 
 public class MusicController {
 
-    private final Stage stage;
-    private final ListView<File> listView;
+    private final TableView<Mp3File> tableView;
     private MediaPlayer mediaPlayer;
     private final Slider timeSlider;
     private final Button playPauseButton;
@@ -37,27 +39,86 @@ public class MusicController {
     private boolean isSliderDragging = false;
     private Duration duration;
 
-    public MusicController(Stage stage) {
-        this.stage = stage;
-        this.listView = new ListView<>();
+    public static class Mp3File {
+        private final File file;
+        private final SimpleStringProperty filename;
+        private final SimpleStringProperty title;
+        private final SimpleStringProperty artist;
+        private final SimpleStringProperty album;
 
-        // Custom cell factory to show only filenames
-        listView.setCellFactory(param -> new javafx.scene.control.ListCell<>() {
-            @Override
-            protected void updateItem(File item, boolean empty) {
-                super.updateItem(item, empty);
-                if (empty || item == null) {
-                    setText(null);
-                } else {
-                    setText(item.getName());
-                }
+        public Mp3File(File file) {
+            this.file = file;
+            this.filename = new SimpleStringProperty(file.getName());
+            this.title = new SimpleStringProperty("");
+            this.artist = new SimpleStringProperty("");
+            this.album = new SimpleStringProperty("");
+            loadMetadata();
+        }
+
+        private void loadMetadata() {
+            try {
+                Media media = new Media(file.toURI().toString());
+                media.getMetadata().addListener((MapChangeListener<String, Object>) change -> {
+                    if (change.wasAdded()) {
+                        String key = change.getKey();
+                        Object value = change.getValueAdded();
+                        if ("title".equals(key))
+                            title.set(value.toString());
+                        if ("artist".equals(key))
+                            artist.set(value.toString());
+                        if ("album".equals(key))
+                            album.set(value.toString());
+                    }
+                });
+            } catch (Exception e) {
+                // Ignore metadata errors
             }
-        });
+        }
+
+        public File getFile() {
+            return file;
+        }
+
+        public String getFilename() {
+            return filename.get();
+        }
+
+        public String getTitle() {
+            return title.get();
+        }
+
+        public String getArtist() {
+            return artist.get();
+        }
+
+        public String getAlbum() {
+            return album.get();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public MusicController(Stage stage) {
+        this.tableView = new TableView<>();
+
+        TableColumn<Mp3File, String> filenameCol = new TableColumn<>("Filename");
+        filenameCol.setCellValueFactory(cellData -> cellData.getValue().filename);
+
+        TableColumn<Mp3File, String> titleCol = new TableColumn<>("Title");
+        titleCol.setCellValueFactory(cellData -> cellData.getValue().title);
+
+        TableColumn<Mp3File, String> artistCol = new TableColumn<>("Artist");
+        artistCol.setCellValueFactory(cellData -> cellData.getValue().artist);
+
+        TableColumn<Mp3File, String> albumCol = new TableColumn<>("Album");
+        albumCol.setCellValueFactory(cellData -> cellData.getValue().album);
+
+        tableView.getColumns().addAll(filenameCol, titleCol, artistCol, albumCol);
+        tableView.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
 
         // Handle selection change to play music
-        listView.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
+        tableView.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
             if (newValue != null) {
-                playFile(newValue);
+                playFile(newValue.getFile());
             }
         });
 
@@ -90,7 +151,7 @@ public class MusicController {
 
     public Parent getView() {
         BorderPane root = new BorderPane();
-        root.setCenter(listView);
+        root.setCenter(tableView);
 
         HBox controls = new HBox(10);
         controls.setPadding(new Insets(10));
@@ -102,7 +163,7 @@ public class MusicController {
     }
 
     public void handleDragOver(DragEvent event) {
-        if (event.getGestureSource() != listView && event.getDragboard().hasFiles()) {
+        if (event.getGestureSource() != tableView && event.getDragboard().hasFiles()) {
             event.acceptTransferModes(TransferMode.COPY_OR_MOVE);
         }
         event.consume();
@@ -113,34 +174,34 @@ public class MusicController {
         boolean success = false;
         if (db.hasFiles()) {
             List<File> files = db.getFiles();
-            List<File> mp3Files = new ArrayList<>();
+            List<Mp3File> mp3Files = new ArrayList<>();
 
             for (File file : files) {
                 if (file.isDirectory()) {
                     mp3Files.addAll(findMp3sInDirectory(file));
                 } else {
                     if (isMp3(file)) {
-                        mp3Files.add(file);
+                        mp3Files.add(new Mp3File(file));
                     }
                 }
             }
 
-            listView.getItems().addAll(mp3Files);
+            tableView.getItems().addAll(mp3Files);
             success = true;
         }
         event.setDropCompleted(success);
         event.consume();
     }
 
-    private List<File> findMp3sInDirectory(File dir) {
-        List<File> mp3s = new ArrayList<>();
+    private List<Mp3File> findMp3sInDirectory(File dir) {
+        List<Mp3File> mp3s = new ArrayList<>();
         File[] files = dir.listFiles();
         if (files != null) {
             for (File file : files) {
                 if (file.isDirectory()) {
                     mp3s.addAll(findMp3sInDirectory(file));
                 } else if (isMp3(file)) {
-                    mp3s.add(file);
+                    mp3s.add(new Mp3File(file));
                 }
             }
         }
@@ -169,9 +230,9 @@ public class MusicController {
             });
             mediaPlayer.setOnEndOfMedia(() -> {
                 // Auto play next
-                int nextIndex = listView.getSelectionModel().getSelectedIndex() + 1;
-                if (nextIndex < listView.getItems().size()) {
-                    listView.getSelectionModel().select(nextIndex);
+                int nextIndex = tableView.getSelectionModel().getSelectedIndex() + 1;
+                if (nextIndex < tableView.getItems().size()) {
+                    tableView.getSelectionModel().select(nextIndex);
                 }
             });
 
@@ -249,12 +310,28 @@ public class MusicController {
     public void handleKeyPressed(KeyEvent event) {
         if (event.getCode() == KeyCode.LEFT) {
             seek(-3);
+            event.consume();
         } else if (event.getCode() == KeyCode.RIGHT) {
             seek(3);
+            event.consume();
         } else if (event.getCode() == KeyCode.BACK_SPACE) {
             deleteCurrentSong();
+            event.consume();
         } else if (event.getCode() == KeyCode.SPACE) {
             togglePlayPause();
+            event.consume();
+        } else if (event.getCode() == KeyCode.UP || event.getCode() == KeyCode.DOWN) {
+            // Let TableView handle navigation, but ensure focus is there if needed
+            // However, since we are using an event filter on Scene, we should be careful
+            // not to consume
+            // UP/DOWN if the TableView needs them.
+            // Actually, if focus is elsewhere, we might want to manually move selection.
+            // But standard behavior is usually sufficient if TableView has focus.
+            // If user wants UP/DOWN to work GLOBALLY even if focus is on slider:
+            if (!tableView.isFocused()) {
+                tableView.requestFocus();
+                // We don't consume here so TableView can process it after getting focus
+            }
         }
     }
 
@@ -265,10 +342,11 @@ public class MusicController {
     }
 
     private void deleteCurrentSong() {
-        File selectedFile = listView.getSelectionModel().getSelectedItem();
-        int selectedIndex = listView.getSelectionModel().getSelectedIndex();
+        Mp3File selectedItem = tableView.getSelectionModel().getSelectedItem();
+        int selectedIndex = tableView.getSelectionModel().getSelectedIndex();
 
-        if (selectedFile != null) {
+        if (selectedItem != null) {
+            File selectedFile = selectedItem.getFile();
             // Stop playback
             if (mediaPlayer != null) {
                 mediaPlayer.stop();
@@ -281,14 +359,14 @@ public class MusicController {
             timeSlider.setValue(0);
 
             // Remove from list
-            listView.getItems().remove(selectedFile);
+            tableView.getItems().remove(selectedItem);
 
             // Select next item if available, or previous
-            if (!listView.getItems().isEmpty()) {
-                if (selectedIndex < listView.getItems().size()) {
-                    listView.getSelectionModel().select(selectedIndex);
+            if (!tableView.getItems().isEmpty()) {
+                if (selectedIndex < tableView.getItems().size()) {
+                    tableView.getSelectionModel().select(selectedIndex);
                 } else {
-                    listView.getSelectionModel().select(listView.getItems().size() - 1);
+                    tableView.getSelectionModel().select(tableView.getItems().size() - 1);
                 }
             }
 
