@@ -7,6 +7,17 @@ A simple JavaFX application to filter MP3 files in a folder.
 - Java 17 or later
 - Maven
 
+## Supported Formats
+
+The application supports the following audio formats:
+
+- MP3 (`.mp3`)
+- WAV (`.wav`)
+- AIFF (`.aif`, `.aiff`)
+- AAC (`.m4a`, `.aac`)
+
+Note: Metadata (Title, Artist, Album) extraction depends on the file format and tags. If metadata is not available, it will display `<not available>`.
+
 ## Usage
 
 1.  **Install/Update Dependencies**:

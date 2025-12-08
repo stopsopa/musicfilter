@@ -33,10 +33,11 @@ import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 public class MusicController {
 
-    private final TableView<Mp3File> tableView;
+    private final TableView<AudioFile> tableView;
     private MediaPlayer mediaPlayer;
     private final Slider timeSlider;
     private final Button playPauseButton;
@@ -44,19 +45,19 @@ public class MusicController {
     private boolean isSliderDragging = false;
     private Duration duration;
 
-    public static class Mp3File {
+    public static class AudioFile {
         private final ObjectProperty<File> file;
         private final SimpleStringProperty filename;
         private final SimpleStringProperty title;
         private final SimpleStringProperty artist;
         private final SimpleStringProperty album;
 
-        public Mp3File(File file) {
+        public AudioFile(File file) {
             this.file = new SimpleObjectProperty<>(file);
             this.filename = new SimpleStringProperty(file.getName());
-            this.title = new SimpleStringProperty("");
-            this.artist = new SimpleStringProperty("");
-            this.album = new SimpleStringProperty("");
+            this.title = new SimpleStringProperty("<not available>");
+            this.artist = new SimpleStringProperty("<not available>");
+            this.album = new SimpleStringProperty("<not available>");
             loadMetadata();
         }
 
@@ -65,19 +66,34 @@ public class MusicController {
                 Media media = new Media(file.get().toURI().toString());
                 media.getMetadata().addListener((MapChangeListener<String, Object>) change -> {
                     if (change.wasAdded()) {
-                        String key = change.getKey();
-                        Object value = change.getValueAdded();
-                        if ("title".equals(key))
-                            title.set(value.toString());
-                        if ("artist".equals(key))
-                            artist.set(value.toString());
-                        if ("album".equals(key))
-                            album.set(value.toString());
+                        updateMetadata(media.getMetadata());
                     }
                 });
             } catch (Exception e) {
-                // Ignore metadata errors
+                // Ignore metadata errors, keep default values
             }
+        }
+
+        private void updateMetadata(Map<String, Object> metadata) {
+            Platform.runLater(() -> {
+                title.set(extractMetadata(metadata, "title"));
+                artist.set(extractMetadata(metadata, "artist"));
+                album.set(extractMetadata(metadata, "album"));
+            });
+        }
+
+        private String extractMetadata(Map<String, Object> metadata, String key) {
+            try {
+                if (metadata.containsKey(key)) {
+                    Object value = metadata.get(key);
+                    if (value != null && !value.toString().trim().isEmpty()) {
+                        return value.toString();
+                    }
+                }
+            } catch (Exception e) {
+                // Fallback on error
+            }
+            return "<not available>";
         }
 
         public File getFile() {
@@ -117,16 +133,16 @@ public class MusicController {
     public MusicController(Stage stage) {
         this.tableView = new TableView<>();
 
-        TableColumn<Mp3File, String> filenameCol = new TableColumn<>("Filename");
+        TableColumn<AudioFile, String> filenameCol = new TableColumn<>("Filename");
         filenameCol.setCellValueFactory(cellData -> cellData.getValue().filename);
 
-        TableColumn<Mp3File, String> titleCol = new TableColumn<>("Title");
+        TableColumn<AudioFile, String> titleCol = new TableColumn<>("Title");
         titleCol.setCellValueFactory(cellData -> cellData.getValue().title);
 
-        TableColumn<Mp3File, String> artistCol = new TableColumn<>("Artist");
+        TableColumn<AudioFile, String> artistCol = new TableColumn<>("Artist");
         artistCol.setCellValueFactory(cellData -> cellData.getValue().artist);
 
-        TableColumn<Mp3File, String> albumCol = new TableColumn<>("Album");
+        TableColumn<AudioFile, String> albumCol = new TableColumn<>("Album");
         albumCol.setCellValueFactory(cellData -> cellData.getValue().album);
 
         tableView.getColumns().addAll(filenameCol, titleCol, artistCol, albumCol);
@@ -135,7 +151,7 @@ public class MusicController {
         // Row Factory for graying out deleted items
         tableView.setRowFactory(tv -> new TableRow<>() {
             @Override
-            protected void updateItem(Mp3File item, boolean empty) {
+            protected void updateItem(AudioFile item, boolean empty) {
                 super.updateItem(item, empty);
                 if (item == null || empty) {
                     setStyle("");
@@ -151,7 +167,7 @@ public class MusicController {
                 }
             }
 
-            private void updateOpacity(Mp3File item) {
+            private void updateOpacity(AudioFile item) {
                 setOpacity(item.isDeleted() ? 0.5 : 1.0);
             }
         });
@@ -215,50 +231,56 @@ public class MusicController {
         boolean success = false;
         if (db.hasFiles()) {
             List<File> files = db.getFiles();
-            List<Mp3File> mp3Files = new ArrayList<>();
+            List<AudioFile> audioFiles = new ArrayList<>();
 
             for (File file : files) {
                 if (file.isDirectory()) {
-                    mp3Files.addAll(findMp3sInDirectory(file));
+                    audioFiles.addAll(findAudioFilesInDirectory(file));
                 } else {
-                    if (isMp3(file)) {
-                        mp3Files.add(new Mp3File(file));
+                    if (isSupportedAudioFile(file)) {
+                        audioFiles.add(new AudioFile(file));
                     }
                 }
             }
 
-            tableView.getItems().addAll(mp3Files);
+            tableView.getItems().addAll(audioFiles);
             success = true;
         }
         event.setDropCompleted(success);
         event.consume();
     }
 
-    private List<Mp3File> findMp3sInDirectory(File dir) {
-        List<Mp3File> mp3s = new ArrayList<>();
+    private List<AudioFile> findAudioFilesInDirectory(File dir) {
+        List<AudioFile> audioFiles = new ArrayList<>();
         // Skip _deleted directories
         if (dir.getName().equals("_deleted")) {
-            return mp3s;
+            return audioFiles;
         }
 
         File[] files = dir.listFiles();
         if (files != null) {
             for (File file : files) {
                 if (file.isDirectory()) {
-                    mp3s.addAll(findMp3sInDirectory(file));
-                } else if (isMp3(file)) {
-                    mp3s.add(new Mp3File(file));
+                    audioFiles.addAll(findAudioFilesInDirectory(file));
+                } else if (isSupportedAudioFile(file)) {
+                    audioFiles.add(new AudioFile(file));
                 }
             }
         }
-        return mp3s;
+        return audioFiles;
     }
 
-    private boolean isMp3(File file) {
-        return file.getName().toLowerCase().endsWith(".mp3");
+    private boolean isSupportedAudioFile(File file) {
+        String name = file.getName().toLowerCase();
+        return name.endsWith(".mp3") ||
+                name.endsWith(".wav") ||
+                name.endsWith(".aif") ||
+                name.endsWith(".aiff") ||
+                name.endsWith(".m4a") ||
+                name.endsWith(".aac");
     }
 
-    private void playFile(Mp3File mp3File) {
+    private void playFile(AudioFile audioFile) {
         if (mediaPlayer != null) {
             mediaPlayer.stop();
             mediaPlayer.dispose();
@@ -268,7 +290,7 @@ public class MusicController {
         // Allow playing deleted files as requested
 
         try {
-            Media media = new Media(mp3File.getFile().toURI().toString());
+            Media media = new Media(audioFile.getFile().toURI().toString());
             mediaPlayer = new MediaPlayer(media);
             mediaPlayer.setOnError(() -> System.err.println("Media error: " + mediaPlayer.getError()));
 
@@ -288,7 +310,7 @@ public class MusicController {
             mediaPlayer.play();
             playPauseButton.setText("||");
         } catch (Exception e) {
-            System.err.println("Error playing file: " + mp3File.getFile().getAbsolutePath());
+            System.err.println("Error playing file: " + audioFile.getFile().getAbsolutePath());
             e.printStackTrace();
         }
     }
@@ -383,7 +405,7 @@ public class MusicController {
     }
 
     private void handleBackspace() {
-        Mp3File selectedItem = tableView.getSelectionModel().getSelectedItem();
+        AudioFile selectedItem = tableView.getSelectionModel().getSelectedItem();
         if (selectedItem == null)
             return;
 
@@ -394,7 +416,7 @@ public class MusicController {
         }
     }
 
-    private void softDeleteFile(Mp3File item) {
+    private void softDeleteFile(AudioFile item) {
         try {
             // Stop playback if playing this file
             if (mediaPlayer != null && mediaPlayer.getMedia().getSource().contains(item.getFile().toURI().toString())) {
@@ -436,7 +458,7 @@ public class MusicController {
         }
     }
 
-    private void restoreFile(Mp3File item) {
+    private void restoreFile(AudioFile item) {
         try {
             File deleted = item.getFile();
             File deletedDir = deleted.getParentFile();
