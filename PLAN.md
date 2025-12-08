@@ -47,3 +47,10 @@ This document tracks the evolution of the Music Filter project, documenting user
 ## 6. Git Ignore
 
 **Refinement**: Update `.gitignore` to include all necessary ignore patterns.
+
+## 7. Global Shortcuts & Metadata
+
+**Refinement**:
+
+- **Global Key Bindings**: Ensure shortcuts (Arrows, Space, Backspace) work regardless of which control has focus.
+- **Metadata Columns**: Display Title, Artist, and Album in the list (requires switching to a TableView).
