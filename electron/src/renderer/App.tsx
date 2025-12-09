@@ -26,7 +26,7 @@ function App() {
   useEffect(() => {
     if (selectedIndex >= 0 && selectedIndex < files.length && audioRef.current) {
         const file = files[selectedIndex];
-        audioRef.current.src = `file://${file.path}`; 
+        audioRef.current.src = `media://${file.path}`; 
         audioRef.current.play().catch(e => console.error("Playback error", e));
         
         // Auto-scroll
