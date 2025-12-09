@@ -7,6 +7,8 @@ function App() {
   const [files, setFiles] = useState<AudioFile[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
   const audioRef = useRef<HTMLAudioElement>(null);
 
   useEffect(() => {
@@ -23,7 +25,8 @@ function App() {
 
   useEffect(() => {
     if (selectedIndex >= 0 && selectedIndex < files.length && audioRef.current) {
-        audioRef.current.src = `file://${files[selectedIndex].path}`; // Electron specific protocol
+        const file = files[selectedIndex];
+        audioRef.current.src = `file://${file.path}`; 
         audioRef.current.play().catch(e => console.error("Playback error", e));
         
         // Auto-scroll
@@ -34,6 +37,26 @@ function App() {
     }
   }, [selectedIndex]);
 
+  const handleTimeUpdate = () => {
+    if (audioRef.current) {
+        setCurrentTime(audioRef.current.currentTime);
+    }
+  };
+
+  const handleDurationChange = () => {
+      if (audioRef.current) {
+          setDuration(audioRef.current.duration);
+      }
+  };
+
+  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const time = parseFloat(e.target.value);
+      if (audioRef.current) {
+          audioRef.current.currentTime = time;
+          setCurrentTime(time);
+      }
+  };
+
   const handleKeyDown = (e: KeyboardEvent) => {
     if (files.length === 0) return;
 
@@ -43,8 +66,16 @@ function App() {
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       setSelectedIndex(prev => Math.max(prev - 1, 0));
+    } else if (e.key === ' ') {
+        e.preventDefault();
+        if (audioRef.current) {
+            if (audioRef.current.paused) audioRef.current.play();
+            else audioRef.current.pause();
+        }
     }
   };
+
+  // ... (drag handlers similar to before)
 
   const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -93,7 +124,7 @@ function App() {
   };
 
   const formatDuration = (seconds?: number) => {
-    if (!seconds) return '';
+    if (!seconds && seconds !== 0) return '--:--';
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
@@ -108,15 +139,36 @@ function App() {
     >
       <div className="header-compact">
           <h1>Music Filter</h1>
-          {/* Hidden audio player - controlled by state */}
-          <audio ref={audioRef} controls style={{ display: 'none' }} /> 
-          <div className="now-playing">
-              {selectedIndex >= 0 && files[selectedIndex] ? (
-                  <span>Playing: <b>{files[selectedIndex].title || files[selectedIndex].name}</b></span>
-              ) : (
-                  <span>Ready to play</span>
-              )}
+          
+          <div className="player-controls">
+            <div className="now-playing">
+                {selectedIndex >= 0 && files[selectedIndex] ? (
+                    <span><b>{files[selectedIndex].title || files[selectedIndex].name}</b></span>
+                ) : (
+                    <span>Select a track</span>
+                )}
+            </div>
+            <div className="scrubber-container">
+                <span className="time-display">{formatDuration(currentTime)}</span>
+                <input 
+                    type="range" 
+                    className="scrubber"
+                    min="0"
+                    max={duration || 100}
+                    value={currentTime}
+                    onChange={handleSeek}
+                />
+                <span className="time-display">{formatDuration(duration)}</span>
+            </div>
           </div>
+
+          <audio 
+            ref={audioRef} 
+            style={{ display: 'none' }} 
+            onTimeUpdate={handleTimeUpdate}
+            onLoadedMetadata={handleDurationChange}
+            onError={(e) => console.error("Audio Error:", e.currentTarget.error)}
+          /> 
       </div>
       
       {isDragging && (

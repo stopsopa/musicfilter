@@ -105,3 +105,43 @@ body {
 .index-col { color: #666; font-size: 11px; }
 .time-col { color: #888; font-size: 11px; text-align: right; }
 .filename-col { color: #aaa; }
+
+/* Player Controls */
+.player-controls {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    margin: 0 20px;
+}
+
+.scrubber-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+}
+
+.scrubber {
+    flex: 1;
+    height: 4px;
+    -webkit-appearance: none;
+    background: #444;
+    border-radius: 2px;
+    cursor: pointer;
+}
+
+.scrubber::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 12px;
+    height: 12px;
+    background: #4CAF50;
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+.time-display {
+    font-size: 11px;
+    color: #888;
+    min-width: 35px;
+    text-align: center;
+}
