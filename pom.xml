@@ -37,9 +37,9 @@
             <version>1.0.3.3</version>
         </dependency>
         <dependency>
-            <groupId>io.github.jseproject</groupId>
-            <artifactId>jse-spi-flac</artifactId>
-            <version>1.1.0</version>
+            <groupId>org.jflac</groupId>
+            <artifactId>jflac-codec</artifactId>
+            <version>1.5.2</version>
         </dependency>
         <dependency>
             <groupId>com.tianscar.javasound</groupId>

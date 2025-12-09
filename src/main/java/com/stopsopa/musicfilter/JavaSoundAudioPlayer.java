@@ -53,14 +53,92 @@ public class JavaSoundAudioPlayer implements AudioPlayer {
 
             if (microseconds != null) {
                 totalDuration.set(Duration.millis(microseconds / 1000.0));
-                System.out.println("Duration found: " + totalDuration.get());
+                System.out.println("Duration found from properties: " + totalDuration.get());
             } else {
-                System.out.println("Duration not found in properties.");
+                // Fallback 1: Calculate from AudioFileFormat frame length
+                long frameLength = fileFormat.getFrameLength();
+                float frameRate = fileFormat.getFormat().getFrameRate();
+
+                if (frameLength != AudioSystem.NOT_SPECIFIED && frameRate != AudioSystem.NOT_SPECIFIED
+                        && frameRate > 0) {
+                    double seconds = frameLength / frameRate;
+                    totalDuration.set(Duration.seconds(seconds));
+                    System.out.println("Duration calculated from AudioFileFormat frames: " + totalDuration.get());
+                } else {
+                    // Fallback 2: Try opening the stream directly (some SPIs only calculate length
+                    // on stream open)
+                    try (AudioInputStream in = AudioSystem.getAudioInputStream(file)) {
+                        frameLength = in.getFrameLength();
+                        frameRate = in.getFormat().getFrameRate();
+                        if (frameLength != AudioSystem.NOT_SPECIFIED && frameRate != AudioSystem.NOT_SPECIFIED
+                                && frameRate > 0) {
+                            double seconds = frameLength / frameRate;
+                            totalDuration.set(Duration.seconds(seconds));
+                            System.out.println(
+                                    "Duration calculated from AudioInputStream frames: " + totalDuration.get());
+                        } else {
+                            System.out.println("Duration could not be determined from Stream. FrameLength: "
+                                    + frameLength + ", FrameRate: " + frameRate);
+
+                            // Fallback 3: Manual FLAC header parsing
+                            if (file.getName().toLowerCase().endsWith(".flac")) {
+                                Duration flacDuration = calculateFlacDuration(file);
+                                if (flacDuration != null) {
+                                    totalDuration.set(flacDuration);
+                                    System.out.println("Duration calculated from manual FLAC header parsing: "
+                                            + totalDuration.get());
+                                }
+                            }
+                        }
+                    } catch (Exception ex) {
+                        System.out.println("Failed to open stream for duration calculation: " + ex.getMessage());
+                    }
+                }
             }
         } catch (Exception e) {
             System.err.println("Error calculating duration: " + e.getMessage());
             e.printStackTrace();
         }
+    }
+
+    private Duration calculateFlacDuration(File file) {
+        try (java.io.DataInputStream dis = new java.io.DataInputStream(new java.io.FileInputStream(file))) {
+            byte[] magic = new byte[4];
+            dis.readFully(magic);
+            if (!"fLaC".equals(new String(magic)))
+                return null;
+
+            // Read Metadata Block Header
+            byte header = dis.readByte();
+            int type = header & 0x7F; // 0 is STREAMINFO
+
+            // Skip length (3 bytes)
+            dis.skipBytes(3);
+
+            if (type != 0)
+                return null; // Expected STREAMINFO as first block
+
+            // STREAMINFO payload
+            // Skip min/max block/frame sizes (10 bytes)
+            dis.skipBytes(10);
+
+            // Read next 8 bytes containing sample rate and total samples
+            long combined = dis.readLong();
+
+            // Sample Rate: 20 bits
+            long sampleRate = (combined >> 44) & 0xFFFFF;
+
+            // Total Samples: 36 bits (lower 36 bits)
+            long totalSamples = combined & 0xFFFFFFFFFL;
+
+            if (sampleRate > 0 && totalSamples > 0) {
+                double seconds = (double) totalSamples / sampleRate;
+                return Duration.seconds(seconds);
+            }
+        } catch (Exception e) {
+            System.err.println("Failed to read FLAC header: " + e.getMessage());
+        }
+        return null;
     }
 
     @Override
@@ -103,31 +181,70 @@ public class JavaSoundAudioPlayer implements AudioPlayer {
             long totalBytesRead = 0;
 
             while (!stopRequested) {
-                if (seekRequested) {
-                    synchronized (this) {
+                Duration targetSeekDuration = null;
+                synchronized (this) {
+                    if (seekRequested) {
+                        targetSeekDuration = seekDuration;
                         seekRequested = false;
-                        long bytesToSkip = (long) (seekDuration.toSeconds() * decodedFormat.getFrameRate()
+                    }
+                }
+
+                if (targetSeekDuration != null) {
+                    try {
+                        long bytesToSkip = (long) (targetSeekDuration.toSeconds() * decodedFormat.getFrameRate()
                                 * decodedFormat.getFrameSize());
 
                         // Close and reopen to seek
-                        decodedStream.close();
-                        encodedStream.close();
+                        // No need to synchronize here as we are the only thread manipulating the
+                        // streams
+                        if (decodedStream != null)
+                            decodedStream.close();
+                        if (encodedStream != null)
+                            encodedStream.close();
+                        if (line != null)
+                            line.flush();
+
                         openStreams();
 
                         // Skip to position
                         long remaining = bytesToSkip;
+                        byte[] skipBuffer = new byte[65536]; // Larger buffer for faster skipping
                         while (remaining > 0) {
-                            long skipped = decodedStream.skip(remaining);
-                            if (skipped <= 0)
-                                break; // EOF or error
+                            if (stopRequested || seekRequested)
+                                break; // Abort if stopped or new seek
+
+                            long skipped = 0;
+                            try {
+                                skipped = decodedStream.skip(remaining);
+                            } catch (IOException e) {
+                                // skip not supported, fall back to read
+                                skipped = 0;
+                            }
+
+                            if (skipped <= 0) {
+                                // Fallback: read to skip
+                                int toRead = (int) Math.min(remaining, skipBuffer.length);
+                                int read = decodedStream.read(skipBuffer, 0, toRead);
+                                if (read == -1)
+                                    break; // EOF
+                                skipped = read;
+                            }
                             remaining -= skipped;
                         }
 
-                        line.flush();
+                        // Reset line buffer
+                        if (line != null) {
+                            line.flush();
+                        }
+
                         totalBytesRead = bytesToSkip;
 
                         // Update UI immediately
-                        Platform.runLater(() -> currentTime.set(seekDuration));
+                        Duration finalSeekDuration = targetSeekDuration;
+                        Platform.runLater(() -> currentTime.set(finalSeekDuration));
+                    } catch (Exception e) {
+                        System.err.println("Error during seek: " + e.getMessage());
+                        e.printStackTrace();
                     }
                 }
 
@@ -147,8 +264,11 @@ public class JavaSoundAudioPlayer implements AudioPlayer {
                     continue; // Loop back to handle seek
 
                 nBytesRead = decodedStream.read(buffer, 0, buffer.length);
-                if (nBytesRead == -1)
+                if (nBytesRead == -1) {
+                    System.out.println("End of stream reached (read returned -1)");
                     break;
+                }
+                // System.out.println("Read " + nBytesRead + " bytes");
 
                 // Ensure we write an integral number of frames
                 int frameSize = decodedFormat.getFrameSize();
@@ -199,24 +319,77 @@ public class JavaSoundAudioPlayer implements AudioPlayer {
             System.out.println("Using direct VorbisAudioFileReader for OGG");
             encodedStream = new javazoom.spi.vorbis.sampled.file.VorbisAudioFileReader().getAudioInputStream(file);
         } else {
+            // For FLAC (jflac-codec) and AAC (JAAD), use standard AudioSystem
             encodedStream = AudioSystem.getAudioInputStream(file);
         }
 
         AudioFormat baseFormat = encodedStream.getFormat();
         System.out.println("Source format: " + baseFormat);
 
-        // Explicitly define target format to avoid "unknown" fields
-        AudioFormat decodedFormat = new AudioFormat(
-                AudioFormat.Encoding.PCM_SIGNED,
-                baseFormat.getSampleRate(),
-                16,
-                baseFormat.getChannels(),
-                baseFormat.getChannels() * 2,
-                baseFormat.getSampleRate(),
-                false);
+        if (file.getName().toLowerCase().endsWith(".ogg")) {
+            // Explicitly define target format to avoid "unknown" fields for OGG
+            AudioFormat decodedFormat = new AudioFormat(
+                    AudioFormat.Encoding.PCM_SIGNED,
+                    baseFormat.getSampleRate(),
+                    16,
+                    baseFormat.getChannels(),
+                    baseFormat.getChannels() * 2,
+                    baseFormat.getSampleRate(),
+                    false);
+            decodedStream = AudioSystem.getAudioInputStream(decodedFormat, encodedStream);
+        } else {
+            // For FLAC, try to decode to native bit depth first
+            int bitDepth = baseFormat.getSampleSizeInBits();
+            if (bitDepth == AudioSystem.NOT_SPECIFIED)
+                bitDepth = 16;
 
-        decodedStream = AudioSystem.getAudioInputStream(decodedFormat, encodedStream);
-        System.out.println("Decoded format: " + decodedStream.getFormat());
+            AudioFormat nativePcmFormat = new AudioFormat(
+                    AudioFormat.Encoding.PCM_SIGNED,
+                    baseFormat.getSampleRate(),
+                    bitDepth,
+                    baseFormat.getChannels(),
+                    baseFormat.getChannels() * (bitDepth / 8),
+                    baseFormat.getSampleRate(),
+                    false);
+
+            System.out.println("Attempting to decode to native PCM: " + nativePcmFormat);
+            try {
+                AudioInputStream pcmStream = AudioSystem.getAudioInputStream(nativePcmFormat, encodedStream);
+
+                // Check if this format is supported by the line
+                DataLine.Info info = new DataLine.Info(SourceDataLine.class, nativePcmFormat);
+                if (AudioSystem.isLineSupported(info)) {
+                    System.out.println("Native PCM format is supported by line.");
+                    decodedStream = pcmStream;
+                } else {
+                    System.out.println("Native PCM format not supported. Downsampling to 16-bit.");
+                    // Downsample to 16-bit
+                    AudioFormat format16 = new AudioFormat(
+                            AudioFormat.Encoding.PCM_SIGNED,
+                            baseFormat.getSampleRate(),
+                            16,
+                            baseFormat.getChannels(),
+                            baseFormat.getChannels() * 2,
+                            baseFormat.getSampleRate(),
+                            false);
+                    decodedStream = AudioSystem.getAudioInputStream(format16, pcmStream);
+                }
+            } catch (Exception e) {
+                System.out.println(
+                        "Failed to decode to native PCM (" + e.getMessage() + "). Trying direct 16-bit conversion.");
+                AudioFormat format16 = new AudioFormat(
+                        AudioFormat.Encoding.PCM_SIGNED,
+                        baseFormat.getSampleRate(),
+                        16,
+                        baseFormat.getChannels(),
+                        baseFormat.getChannels() * 2,
+                        baseFormat.getSampleRate(),
+                        false);
+                decodedStream = AudioSystem.getAudioInputStream(format16, encodedStream);
+            }
+        }
+
+        System.out.println("Final decoded format: " + decodedStream.getFormat());
     }
 
     @Override
