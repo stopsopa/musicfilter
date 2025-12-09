@@ -1,47 +1,107 @@
 #root {
   max-width: 100%;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: left;
+  margin: 0;
+  padding: 0;
+  height: 100vh;
+  box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden; /* Prevent body scroll */
+    background-color: #1a1a1a;
+    color: #e0e0e0;
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 13px;
 }
 
 .container {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  position: relative;
 }
 
-.file-list {
+.header-compact {
+  padding: 8px 12px;
+  background-color: #252525;
+  border-bottom: 1px solid #333;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.header-compact h1 {
+    font-size: 16px;
+    margin: 0;
+}
+
+.now-playing {
+    font-size: 12px;
+    color: #4CAF50;
+}
+
+.drop-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+}
+
+.empty-placeholder {
+    padding: 20px;
+}
+
+.file-list-container {
   flex: 1;
   overflow-y: auto;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  padding: 10px;
-  background-color: #1a1a1a;
+  position: relative;
 }
 
-.file-item {
-  display: flex;
-  padding: 5px 10px;
-  border-bottom: 1px solid #333;
+.file-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
 }
 
-.file-index {
-  width: 40px;
-  color: #888;
+.file-table th {
+    text-align: left;
+    background: #333;
+    position: sticky;
+    top: 0;
+    padding: 6px 8px;
+    font-size: 11px;
+    text-transform: uppercase;
+    color: #aaa;
+    border-bottom: 1px solid #444;
 }
 
-.file-name {
-  flex: 1;
-  font-weight: bold;
+.file-table td {
+    padding: 4px 8px;
+    border-bottom: 1px solid #2a2a2a;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #ccc;
 }
 
-.file-path {
-  color: #666;
-  font-size: 0.8em;
-  margin-left: 10px;
-  max-width: 300px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.file-table tr.selected td {
+    background-color: #0d47a1;
+    color: white;
 }
+
+.file-table tr:hover td {
+    background-color: #2a2a2a;
+}
+.file-table tr.selected:hover td {
+    background-color: #1565c0;
+}
+
+.index-col { color: #666; font-size: 11px; }
+.time-col { color: #888; font-size: 11px; text-align: right; }
+.filename-col { color: #aaa; }

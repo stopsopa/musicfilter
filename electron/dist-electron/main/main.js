@@ -64,6 +64,22 @@ app.whenReady().then(() => {
             return [];
         }
     });
+    ipcMain.handle('get-metadata', async (event, filePath) => {
+        try {
+            const { parseFile } = await import('music-metadata');
+            const metadata = await parseFile(filePath);
+            return {
+                title: metadata.common.title,
+                artist: metadata.common.artist,
+                album: metadata.common.album,
+                duration: metadata.format.duration
+            };
+        }
+        catch (error) {
+            console.error('Error reading metadata for:', filePath, error);
+            return {};
+        }
+    });
     createWindow();
     app.on("activate", () => {
         if (BrowserWindow.getAllWindows().length === 0) {
