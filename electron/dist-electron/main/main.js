@@ -29,7 +29,7 @@ function scanDirectory(dir) {
 }
 function createWindow() {
     const win = new BrowserWindow({
-        width: 800,
+        width: 1300,
         height: 600,
         webPreferences: {
             preload: path.join(__dirname, "../preload/preload.js"),
