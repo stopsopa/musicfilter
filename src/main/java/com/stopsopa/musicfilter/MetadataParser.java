@@ -14,16 +14,25 @@ public class MetadataParser {
 
         System.out.println("Parsing metadata for: " + name);
 
-        // 1. Try ID3v2 (Common in MP3, AAC) - Check start of file
+        // 1. Try ID3v2 (Common in MP3, AAC, AIFF, WAV) - Check start of file
         metadata.putAll(parseId3v2(file, 0));
 
-        // 2. Format specific parsing
+        // 2. Try ID3v1 (Common in MP3, AAC) - Check end of file
+        metadata.putAll(parseId3v1(file));
+
+        // 3. Format specific parsing
         if (name.endsWith(".flac")) {
             metadata.putAll(parseFlac(file));
         } else if (name.endsWith(".ogg")) {
             metadata.putAll(parseOgg(file));
         } else if (name.endsWith(".m4a") || name.endsWith(".aac") || name.endsWith(".mp4")) {
-            metadata.putAll(parseM4a(file));
+            // Check if it's an ADTS stream (starts with 0xFFF)
+            if (isAdts(file)) {
+                System.out.println("Identified as ADTS AAC: " + name);
+                // ADTS usually uses ID3v1/v2 which are already checked.
+            } else {
+                metadata.putAll(parseM4a(file));
+            }
         } else if (name.endsWith(".wav")) {
             metadata.putAll(parseWav(file));
         } else if (name.endsWith(".aif") || name.endsWith(".aiff")) {
@@ -33,9 +42,52 @@ public class MetadataParser {
         return metadata;
     }
 
+    private static boolean isAdts(File file) {
+        try (java.io.RandomAccessFile raf = new java.io.RandomAccessFile(file, "r")) {
+            if (raf.length() < 2)
+                return false;
+            byte[] header = new byte[2];
+            raf.readFully(header);
+            // Sync word is 12 bits of 1s: 0xFFF
+            return (header[0] & 0xFF) == 0xFF && (header[1] & 0xF0) == 0xF0;
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    private static Map<String, Object> parseId3v1(File file) {
+        Map<String, Object> metadata = new HashMap<>();
+        try (java.io.RandomAccessFile raf = new java.io.RandomAccessFile(file, "r")) {
+            if (raf.length() < 128)
+                return metadata;
+            raf.seek(raf.length() - 128);
+            byte[] tag = new byte[128];
+            raf.readFully(tag);
+
+            if (tag[0] == 'T' && tag[1] == 'A' && tag[2] == 'G') {
+                System.out.println("Found ID3v1 tag at end of file");
+                String title = new String(tag, 3, 30, StandardCharsets.ISO_8859_1).trim();
+                String artist = new String(tag, 33, 30, StandardCharsets.ISO_8859_1).trim();
+                String album = new String(tag, 63, 30, StandardCharsets.ISO_8859_1).trim();
+
+                if (!title.isEmpty())
+                    metadata.put("title", title);
+                if (!artist.isEmpty())
+                    metadata.put("artist", artist);
+                if (!album.isEmpty())
+                    metadata.put("album", album);
+            }
+        } catch (Exception e) {
+            System.err.println("Error parsing ID3v1: " + e.getMessage());
+        }
+        return metadata;
+    }
+
     private static Map<String, Object> parseId3v2(File file, long offset) {
         Map<String, Object> metadata = new HashMap<>();
         try (java.io.RandomAccessFile raf = new java.io.RandomAccessFile(file, "r")) {
+            if (offset >= raf.length())
+                return metadata;
             raf.seek(offset);
             byte[] header = new byte[10];
             raf.readFully(header);
@@ -120,6 +172,8 @@ public class MetadataParser {
             long fileSize = raf.length();
             long pos = 12;
 
+            System.out.println("Parsing WAV chunks for: " + file.getName());
+
             while (pos < fileSize) {
                 raf.seek(pos);
                 if (fileSize - pos < 8)
@@ -130,10 +184,13 @@ public class MetadataParser {
                 String chunkId = new String(chunkHeader, 0, 4, StandardCharsets.ISO_8859_1);
                 int chunkSize = Integer.reverseBytes(getIntBE(chunkHeader, 4)); // WAV is Little Endian
 
+                System.out.println("  Found chunk: " + chunkId + ", size: " + chunkSize + " at " + pos);
+
                 if (chunkId.equals("LIST")) {
                     byte[] typeBytes = new byte[4];
                     raf.readFully(typeBytes);
                     String type = new String(typeBytes, StandardCharsets.ISO_8859_1);
+                    System.out.println("    LIST type: " + type);
 
                     if (type.equals("INFO")) {
                         long listEnd = pos + 8 + chunkSize;
@@ -149,6 +206,8 @@ public class MetadataParser {
                             String subId = new String(subHeader, 0, 4, StandardCharsets.ISO_8859_1);
                             int subSize = Integer.reverseBytes(getIntBE(subHeader, 4));
 
+                            System.out.println("      Sub-chunk: " + subId + ", size: " + subSize);
+
                             if (subSize > listEnd - subPos - 8)
                                 break;
 
@@ -157,6 +216,8 @@ public class MetadataParser {
                             String value = new String(subData, StandardCharsets.UTF_8).trim();
                             if (value.endsWith("\0"))
                                 value = value.substring(0, value.length() - 1);
+
+                            System.out.println("      Value: " + value);
 
                             if (subId.equals("INAM"))
                                 metadata.put("title", value);
@@ -197,6 +258,8 @@ public class MetadataParser {
             long fileSize = raf.length();
             long pos = 12;
 
+            System.out.println("Parsing AIFF chunks for: " + file.getName());
+
             while (pos < fileSize) {
                 raf.seek(pos);
                 if (fileSize - pos < 8)
@@ -206,6 +269,8 @@ public class MetadataParser {
                 raf.readFully(chunkHeader);
                 String chunkId = new String(chunkHeader, 0, 4, StandardCharsets.ISO_8859_1);
                 int chunkSize = getIntBE(chunkHeader, 4);
+
+                System.out.println("  Found chunk: " + chunkId + ", size: " + chunkSize + " at " + pos);
 
                 if (chunkId.equals("NAME")) {
                     byte[] data = new byte[chunkSize];
@@ -223,6 +288,7 @@ public class MetadataParser {
                     byte[] typeBytes = new byte[4];
                     raf.readFully(typeBytes);
                     String type = new String(typeBytes, StandardCharsets.ISO_8859_1);
+                    System.out.println("    LIST type: " + type);
 
                     if (type.equals("INFO")) {
                         long listEnd = pos + 8 + chunkSize;
@@ -238,6 +304,8 @@ public class MetadataParser {
                             String subId = new String(subHeader, 0, 4, StandardCharsets.ISO_8859_1);
                             int subSize = getIntBE(subHeader, 4); // AIFF is Big Endian
 
+                            System.out.println("      Sub-chunk: " + subId + ", size: " + subSize);
+
                             if (subSize > listEnd - subPos - 8)
                                 break;
 
@@ -246,6 +314,8 @@ public class MetadataParser {
                             String value = new String(subData, StandardCharsets.UTF_8).trim();
                             if (value.endsWith("\0"))
                                 value = value.substring(0, value.length() - 1);
+
+                            System.out.println("      Value: " + value);
 
                             if (subId.equals("INAM"))
                                 metadata.put("title", value);
@@ -316,8 +386,8 @@ public class MetadataParser {
     private static Map<String, Object> parseOgg(File file) {
         Map<String, Object> metadata = new HashMap<>();
         try (java.io.RandomAccessFile raf = new java.io.RandomAccessFile(file, "r")) {
-            // Scan first 100KB for "\x03vorbis" signature
-            int maxScan = 100 * 1024;
+            // Scan first 5MB for "\x03vorbis" signature (increased from 100KB)
+            int maxScan = 5 * 1024 * 1024;
             if (raf.length() < maxScan)
                 maxScan = (int) raf.length();
             byte[] data = new byte[maxScan];
