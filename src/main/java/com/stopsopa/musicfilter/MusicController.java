@@ -113,54 +113,75 @@ public class MusicController {
         }
 
         private boolean isJavaFXSupported(String name) {
-            return name.endsWith(".mp3") || name.endsWith(".wav") ||
-                    name.endsWith(".aif") || name.endsWith(".aiff");
-            // Removed m4a/aac from JavaFX support to force manual parsing which is now
-            // implemented
-            // or we can keep it if JavaFX works for some?
-            // User said "only mp3" works. JavaFX failed for AAC metadata in logs?
-            // Actually logs for AAC showed JavaSoundAudioPlayer being used for playback,
-            // but metadata loading logic checks isJavaFXSupported.
-            // If isJavaFXSupported includes m4a/aac, it uses Media class.
-            // Let's remove m4a/aac from here to use our new parser.
+            return name.endsWith(".mp3");
+            // Removed m4a/aac/wav/aiff from JavaFX support to force manual parsing
         }
 
         private void updateMetadata(Map<String, Object> metadata) {
             Platform.runLater(() -> {
-                title.set(extractMetadata(metadata, "title"));
-                artist.set(extractMetadata(metadata, "artist", "author")); // fallback to author
-                album.set(extractMetadata(metadata, "album"));
-            });
-        }
+                // 1. Standard keys (lowercase from MetadataParser)
+                String newTitle = "";
+                String newArtist = "";
+                String newAlbum = "";
 
-        private String extractMetadata(Map<String, Object> metadata, String... keys) {
-            try {
-                // 1. Try direct key lookup
-                for (String key : keys) {
-                    if (metadata.containsKey(key)) {
-                        Object value = metadata.get(key);
-                        if (value != null && !value.toString().trim().isEmpty()) {
-                            return value.toString();
-                        }
+                if (metadata.containsKey("title"))
+                    newTitle = (String) metadata.get("title");
+                if (metadata.containsKey("artist"))
+                    newArtist = (String) metadata.get("artist");
+                if (metadata.containsKey("album"))
+                    newAlbum = (String) metadata.get("album");
+
+                // 2. Case-insensitive keys (from SPIs)
+                if (newTitle.isEmpty() || newArtist.isEmpty() || newAlbum.isEmpty()) {
+                    for (String key : metadata.keySet()) {
+                        String k = key.toLowerCase();
+                        if (newTitle.isEmpty() && k.equals("title"))
+                            newTitle = metadata.get(key).toString();
+                        if (newArtist.isEmpty() && k.equals("artist"))
+                            newArtist = metadata.get(key).toString();
+                        if (newAlbum.isEmpty() && k.equals("album"))
+                            newAlbum = metadata.get(key).toString();
                     }
                 }
 
-                // 2. Try scanning values (useful for OGG/Vorbis comments like "TITLE=...")
-                for (Object value : metadata.values()) {
-                    if (value instanceof String) {
-                        String s = (String) value;
-                        for (String key : keys) {
-                            if (s.toUpperCase().startsWith(key.toUpperCase() + "=")) {
-                                return s.substring(key.length() + 1).trim();
+                // 3. Scan values for "KEY=VALUE" patterns (Vorbis comments via SPI)
+                if (newTitle.isEmpty() || newArtist.isEmpty() || newAlbum.isEmpty()) {
+                    for (Object value : metadata.values()) {
+                        if (value instanceof String) {
+                            String v = (String) value;
+                            int eq = v.indexOf('=');
+                            if (eq > 0) {
+                                String k = v.substring(0, eq).toUpperCase();
+                                String val = v.substring(eq + 1);
+                                if (newTitle.isEmpty() && k.equals("TITLE"))
+                                    newTitle = val;
+                                if (newArtist.isEmpty() && k.equals("ARTIST"))
+                                    newArtist = val;
+                                if (newAlbum.isEmpty() && k.equals("ALBUM"))
+                                    newAlbum = val;
                             }
                         }
                     }
                 }
-            } catch (Exception e) {
-                System.err.println("Error extracting metadata: " + e.getMessage());
-                e.printStackTrace();
-            }
-            return "<not available>";
+
+                // 4. Fallback for specific SPI keys
+                if (newTitle.isEmpty() && metadata.containsKey("ogg.comment.title"))
+                    newTitle = metadata.get("ogg.comment.title").toString();
+                if (newArtist.isEmpty() && metadata.containsKey("ogg.comment.artist"))
+                    newArtist = metadata.get("ogg.comment.artist").toString();
+                if (newAlbum.isEmpty() && metadata.containsKey("ogg.comment.album"))
+                    newAlbum = metadata.get("ogg.comment.album").toString();
+
+                if (!newTitle.isEmpty())
+                    this.title.set(newTitle);
+                else
+                    this.title.set(file.get().getName());
+
+                if (!newArtist.isEmpty())
+                    this.artist.set(newArtist);
+                if (!newAlbum.isEmpty())
+                    this.album.set(newAlbum);
+            });
         }
 
         public File getFile() {
@@ -194,7 +215,6 @@ public class MusicController {
         public boolean isDeleted() {
             return file.get().getParentFile().getName().equals("_deleted");
         }
-
     }
 
     @SuppressWarnings("unchecked")
