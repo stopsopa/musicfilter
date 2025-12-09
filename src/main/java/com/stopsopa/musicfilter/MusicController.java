@@ -71,23 +71,42 @@ public class MusicController {
                     Media media = new Media(f.toURI().toString());
                     media.getMetadata().addListener((MapChangeListener<String, Object>) change -> {
                         if (change.wasAdded()) {
+                            System.out.println("JavaFX Metadata for " + name + ": " + media.getMetadata());
                             updateMetadata(media.getMetadata());
                         }
                     });
                 } catch (Exception e) {
-                    // Ignore
+                    System.err.println("Error loading JavaFX metadata for " + name + ": " + e.getMessage());
+                    e.printStackTrace();
                 }
             } else {
-                // Try JavaSound properties for FLAC/OGG
+                // Try JavaSound properties for FLAC/OGG/AAC
                 new Thread(() -> {
                     try {
-                        AudioFileFormat aff = AudioSystem.getAudioFileFormat(f);
-                        if (aff instanceof TAudioFileFormat) {
-                            Map<String, Object> props = ((TAudioFileFormat) aff).properties();
-                            updateMetadata(props);
+                        Map<String, Object> props = new java.util.HashMap<>();
+
+                        // 1. Try manual parsing first (more reliable for standard tags)
+                        props.putAll(MetadataParser.parse(f));
+
+                        // 2. Try SPI properties as fallback/supplement
+                        try {
+                            AudioFileFormat aff;
+                            if (name.endsWith(".ogg")) {
+                                aff = new javazoom.spi.vorbis.sampled.file.VorbisAudioFileReader()
+                                        .getAudioFileFormat(f);
+                            } else {
+                                aff = AudioSystem.getAudioFileFormat(f);
+                            }
+                            props.putAll(aff.properties());
+                        } catch (Exception e) {
+                            // Ignore SPI errors if manual parsing worked
                         }
+
+                        System.out.println("Metadata properties for " + name + ": " + props);
+                        updateMetadata(props);
                     } catch (Exception e) {
-                        // Ignore
+                        System.err.println("Error loading metadata for " + name + ": " + e.getMessage());
+                        e.printStackTrace();
                     }
                 }).start();
             }
@@ -95,8 +114,15 @@ public class MusicController {
 
         private boolean isJavaFXSupported(String name) {
             return name.endsWith(".mp3") || name.endsWith(".wav") ||
-                    name.endsWith(".aif") || name.endsWith(".aiff") ||
-                    name.endsWith(".m4a") || name.endsWith(".aac");
+                    name.endsWith(".aif") || name.endsWith(".aiff");
+            // Removed m4a/aac from JavaFX support to force manual parsing which is now
+            // implemented
+            // or we can keep it if JavaFX works for some?
+            // User said "only mp3" works. JavaFX failed for AAC metadata in logs?
+            // Actually logs for AAC showed JavaSoundAudioPlayer being used for playback,
+            // but metadata loading logic checks isJavaFXSupported.
+            // If isJavaFXSupported includes m4a/aac, it uses Media class.
+            // Let's remove m4a/aac from here to use our new parser.
         }
 
         private void updateMetadata(Map<String, Object> metadata) {
@@ -109,6 +135,7 @@ public class MusicController {
 
         private String extractMetadata(Map<String, Object> metadata, String... keys) {
             try {
+                // 1. Try direct key lookup
                 for (String key : keys) {
                     if (metadata.containsKey(key)) {
                         Object value = metadata.get(key);
@@ -117,8 +144,21 @@ public class MusicController {
                         }
                     }
                 }
+
+                // 2. Try scanning values (useful for OGG/Vorbis comments like "TITLE=...")
+                for (Object value : metadata.values()) {
+                    if (value instanceof String) {
+                        String s = (String) value;
+                        for (String key : keys) {
+                            if (s.toUpperCase().startsWith(key.toUpperCase() + "=")) {
+                                return s.substring(key.length() + 1).trim();
+                            }
+                        }
+                    }
+                }
             } catch (Exception e) {
-                // Fallback
+                System.err.println("Error extracting metadata: " + e.getMessage());
+                e.printStackTrace();
             }
             return "<not available>";
         }
@@ -155,10 +195,6 @@ public class MusicController {
             return file.get().getParentFile().getName().equals("_deleted");
         }
 
-        // Helper interface for Tritonus properties
-        private interface TAudioFileFormat {
-            Map<String, Object> properties();
-        }
     }
 
     @SuppressWarnings("unchecked")
