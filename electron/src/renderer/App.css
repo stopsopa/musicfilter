@@ -1,0 +1,47 @@
+#root {
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 2rem;
+  text-align: left;
+}
+
+.container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.file-list {
+  flex: 1;
+  overflow-y: auto;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 10px;
+  background-color: #1a1a1a;
+}
+
+.file-item {
+  display: flex;
+  padding: 5px 10px;
+  border-bottom: 1px solid #333;
+}
+
+.file-index {
+  width: 40px;
+  color: #888;
+}
+
+.file-name {
+  flex: 1;
+  font-weight: bold;
+}
+
+.file-path {
+  color: #666;
+  font-size: 0.8em;
+  margin-left: 10px;
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
