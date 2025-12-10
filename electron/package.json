@@ -1,6 +1,10 @@
 {
   "name": "electron",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/stopsopa/musicfilter.git"
+  },
   "version": "0.0.0",
   "type": "module",
   "main": "dist-electron/main/main.js",
