@@ -46,3 +46,4 @@ Prepare the `MusicFilter` Electron application for simple installation by end-us
       2.  Select **Open**.
       3.  Click **Open** in the dialog box.
     - You only need to do this once.
+
