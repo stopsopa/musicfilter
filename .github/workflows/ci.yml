@@ -1,0 +1,46 @@
+name: CI/Release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "electron/**"
+      - ".github/workflows/ci.yml"
+
+permissions:
+  contents: write # to create releases and tags
+  issues: write # to comment on issues
+  pull-requests: write # to comment on PRs
+
+jobs:
+  release:
+    name: Release
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: ./electron
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Required for semantic-release to analyze commits
+          persist-credentials: false # We will use a token for semantic-release
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+          cache-dependency-path: electron/package-lock.json
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Verify Build
+        run: npm run build
+
+      - name: Semantic Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx semantic-release
