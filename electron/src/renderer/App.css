@@ -145,3 +145,16 @@ body {
     min-width: 35px;
     text-align: center;
 }
+
+.play-pause-btn {
+    background: none;
+    border: none;
+    color: #4CAF50;
+    font-size: 16px;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+}
+.play-pause-btn:hover {
+    color: #66BB6A;
+}

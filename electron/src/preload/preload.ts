@@ -15,5 +15,6 @@ window.addEventListener('DOMContentLoaded', () => {
 contextBridge.exposeInMainWorld('electronAPI', {
   scanDirectory: (path: string) => ipcRenderer.invoke('scan-directory', path),
   getPathForFile: (file: File) => webUtils.getPathForFile(file),
-  getMetadata: (path: string) => ipcRenderer.invoke('get-metadata', path)
+  getMetadata: (path: string) => ipcRenderer.invoke('get-metadata', path),
+  readFileBuffer: (path: string) => ipcRenderer.invoke('read-file-buffer', path)
 });

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, type DragEvent } from 'react';
 import './App.css';
 import { FileDropZone } from './components/FileDropZone';
 import type { AudioFile } from './types';
+import { getPlayableUrl } from './audioTranscoder';
 
 function App() {
   const [files, setFiles] = useState<AudioFile[]>([]);
@@ -9,7 +10,10 @@ function App() {
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [isTranscoding, setIsTranscoding] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const currentBlobUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
     const preventDefault = (e: Event) => e.preventDefault();
@@ -26,8 +30,24 @@ function App() {
   useEffect(() => {
     if (selectedIndex >= 0 && selectedIndex < files.length && audioRef.current) {
         const file = files[selectedIndex];
-        audioRef.current.src = `media://${file.path}`; 
-        audioRef.current.play().catch(e => console.error("Playback error", e));
+        
+        // Revoke previous blob URL to prevent memory leaks
+        if (currentBlobUrlRef.current && currentBlobUrlRef.current.startsWith('blob:')) {
+          URL.revokeObjectURL(currentBlobUrlRef.current);
+          currentBlobUrlRef.current = null;
+        }
+
+        setIsTranscoding(true);
+        getPlayableUrl(file.path)
+          .then(url => {
+            if (audioRef.current) {
+              currentBlobUrlRef.current = url;
+              audioRef.current.src = url;
+              audioRef.current.play().catch(e => console.error("Playback error", e));
+            }
+          })
+          .catch(e => console.error("Transcoding error", e))
+          .finally(() => setIsTranscoding(false));
         
         // Auto-scroll
         const row = document.getElementById(`file-row-${selectedIndex}`);
@@ -54,6 +74,16 @@ function App() {
       if (audioRef.current) {
           audioRef.current.currentTime = time;
           setCurrentTime(time);
+      }
+  };
+
+  const togglePlayPause = () => {
+      if (audioRef.current) {
+          if (audioRef.current.paused) {
+              audioRef.current.play();
+          } else {
+              audioRef.current.pause();
+          }
       }
   };
 
@@ -142,13 +172,18 @@ function App() {
           
           <div className="player-controls">
             <div className="now-playing">
-                {selectedIndex >= 0 && files[selectedIndex] ? (
+                {isTranscoding ? (
+                    <span>Transcoding...</span>
+                ) : selectedIndex >= 0 && files[selectedIndex] ? (
                     <span><b>{files[selectedIndex].title || files[selectedIndex].name}</b></span>
                 ) : (
                     <span>Select a track</span>
                 )}
             </div>
             <div className="scrubber-container">
+                <button className="play-pause-btn" onClick={togglePlayPause}>
+                    {isPlaying ? '⏸' : '▶'}
+                </button>
                 <span className="time-display">{formatDuration(currentTime)}</span>
                 <input 
                     type="range" 
@@ -167,6 +202,8 @@ function App() {
             style={{ display: 'none' }} 
             onTimeUpdate={handleTimeUpdate}
             onLoadedMetadata={handleDurationChange}
+            onPlay={() => setIsPlaying(true)}
+            onPause={() => setIsPlaying(false)}
             onError={(e) => console.error("Audio Error:", e.currentTarget.error)}
           /> 
       </div>

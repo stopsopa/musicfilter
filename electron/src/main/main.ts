@@ -1,8 +1,8 @@
 
-import { app, BrowserWindow, ipcMain, protocol, net } from "electron";
+import { app, BrowserWindow, ipcMain } from "electron";
 import path from "path";
 import fs from "fs";
-import { fileURLToPath, pathToFileURL } from 'url';
+import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -49,49 +49,7 @@ function createWindow() {
   }
 }
 
-
-// Register 'media' scheme as privileged to behave like standard HTTP
-protocol.registerSchemesAsPrivileged([
-  { 
-    scheme: 'media', 
-    privileges: { 
-      secure: true, 
-      supportFetchAPI: true, 
-      standard: true, 
-      stream: true,
-      bypassCSP: true,
-      corsEnabled: true
-    } 
-  }
-]);
-
 app.whenReady().then(() => {
-  protocol.handle('media', (request) => {
-    try {
-        const u = new URL(request.url);
-        let pathname = decodeURIComponent(u.pathname);
-        const hostname = decodeURIComponent(u.hostname);
-
-        // Fix for Mac/Linux: if the starting path component was interpreted as a hostname
-        // (e.g. media://Users/foo -> host="users", path="/foo")
-        // we need to prepend it back to the path.
-        // We assume absolute paths on these OSes start with /.
-        if (hostname && process.platform !== 'win32') {
-             pathname = `/${hostname}${pathname}`;
-        }
-        
-        // On Windows, if we get media://C:/path, hostname might be empty or C?
-        // Usually file URLs on Windows are file:///C:/path (hostname empty).
-        // If we get hostname, we might need to handle it, but standard file: logic handles drive letters in pathname usually if 3 slashes.
-        
-        // Convert to a proper file:// URL
-        return net.fetch(pathToFileURL(pathname).toString());
-    } catch (error) {
-        console.error('Protocol media error:', error, request.url);
-        return new Response('Bad Request ' + error, { status: 400 });
-    }
-  });
-
   ipcMain.handle('scan-directory', async (event, inputPath) => {
     console.log('Main process received scan-directory for:', inputPath);
     // If it's a file, return it if supported. If dir, scan it.
@@ -106,6 +64,16 @@ app.whenReady().then(() => {
     } catch (e) {
         console.error("Error handling path:", inputPath, e);
         return [];
+    }
+  });
+
+  ipcMain.handle('read-file-buffer', async (_event, filePath: string) => {
+    try {
+      const buffer = fs.readFileSync(filePath);
+      return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+    } catch (error) {
+      console.error('Error reading file buffer:', filePath, error);
+      return null;
     }
   });
 
