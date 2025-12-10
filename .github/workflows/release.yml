@@ -3,12 +3,23 @@ name: Release Build
 on:
   release:
     types: [published]
+  # This trigger allows this workflow to be called by other workflows (like bump-version.yml)
+  workflow_call:
+    inputs:
+      tag_name:
+        description: "The tag to release (e.g. v1.0.0). Defaults to github.ref_name."
+        required: false
+        type: string
 
 jobs:
   build-mac:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # If called via workflow_call, use the passed input.tag_name
+          # If triggered via release:published, use the default github.ref
+          ref: ${{ inputs.tag_name || github.ref }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -24,7 +35,9 @@ jobs:
       - name: Sync version from tag
         working-directory: ./electron
         run: |
-          VERSION=${GITHUB_REF_NAME#v}
+          # Determine the version string to use
+          REF_NAME=${{ inputs.tag_name || github.ref_name }}
+          VERSION=${REF_NAME#v}
           echo "Setting version to $VERSION"
           npm version $VERSION --no-git-tag-version
 

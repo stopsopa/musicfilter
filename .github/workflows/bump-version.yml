@@ -26,7 +26,6 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ inputs.branch }}
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -39,6 +38,51 @@ jobs:
         run: npm ci
 
       - name: Bump Version & Draft Release
+        id: release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx semantic-release
+        run: |
+          # 1.1 Detection Strategy:
+          # semantic-release doesn't easily output "I just created v1.0.1". 
+          # So we detect it by checking the latest git tag BEFORE and AFTER running it.
+
+          # Step A: Get the latest tag present currently
+          git fetch --tags
+          OLD_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          echo "Old tag: $OLD_TAG"
+
+          # Step B: Run semantic-release (creates new tag if changes exist)
+          npx semantic-release
+
+          # Step C: Get the latest tag again
+          git fetch --tags
+          NEW_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          echo "New tag: $NEW_TAG"
+
+          # Step D: Compare. If different, we have a release!
+          if [ "$OLD_TAG" != "$NEW_TAG" ] && [ -n "$NEW_TAG" ]; then
+            echo "New release detected: $NEW_TAG"
+            # Set outputs for the next job to see
+            echo "new_tag=$NEW_TAG" >> $GITHUB_OUTPUT
+            echo "released=true" >> $GITHUB_OUTPUT
+          else
+            echo "No new release created"
+            echo "released=false" >> $GITHUB_OUTPUT
+          fi
+    outputs:
+      # 2. Capture outputs from the step above so they can be derived by other jobs
+      new_tag: ${{ steps.release.outputs.new_tag }}
+      released: ${{ steps.release.outputs.released }}
+
+  # 3. Trigger the actual build & release workflow
+  # This uses "Reusable Workflows" (workflow_call) which works even with the default GITHUB_TOKEN
+  trigger-release:
+    needs: bump
+    # Only run if a new release was actually created
+    if: needs.bump.outputs.released == 'true'
+    # Call the local release.yml file directly
+    uses: ./.github/workflows/release.yml
+    with:
+      # Pass the newly created tag to the release workflow so it checks out the correct code
+      tag_name: ${{ needs.bump.outputs.new_tag }}
+    secrets: inherit
