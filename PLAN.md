@@ -62,3 +62,4 @@ This document tracks the evolution of the Music Filter project, documenting user
 - **Soft Delete**: Pressing `BACKSPACE` should move the file to a temporary location (e.g., `_deleted` folder) and gray out the item in the list instead of removing it.
 - **Restore**: Pressing `BACKSPACE` on a grayed-out item should restore the file to its original location and un-gray it.
 - **Persistence**: It is acceptable that this state is lost on app restart (files remain in the deleted folder).
+
