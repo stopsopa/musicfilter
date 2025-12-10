@@ -13,7 +13,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22 # Updated to 22 for consistency
           cache: "npm"
           cache-dependency-path: electron/package-lock.json
 
@@ -24,7 +24,6 @@ jobs:
       - name: Sync version from tag
         working-directory: ./electron
         run: |
-          # Strip 'v' prefix if present
           VERSION=${GITHUB_REF_NAME#v}
           echo "Setting version to $VERSION"
           npm version $VERSION --no-git-tag-version

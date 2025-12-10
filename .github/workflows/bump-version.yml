@@ -1,0 +1,44 @@
+name: Bump Version
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch to release from"
+        required: true
+        default: "main"
+
+permissions:
+  contents: write # to push commits and tags
+  issues: write # to comment on issues
+  pull-requests: write # to comment on PRs
+
+jobs:
+  bump:
+    name: Suggest Version & Draft Release
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./electron
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.branch }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22 # Updated to 22 for semantic-release compatibility
+          cache: "npm"
+          cache-dependency-path: electron/package-lock.json
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Bump Version & Draft Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx semantic-release
