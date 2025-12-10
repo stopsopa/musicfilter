@@ -12,6 +12,28 @@
     "lint": "eslint .",
     "preview": "vite preview"
   },
+  "build": {
+    "appId": "com.stopsopa.musicfilter",
+    "productName": "MusicFilter",
+    "directories": {
+      "output": "release"
+    },
+    "mac": {
+      "category": "public.app-category.music",
+      "target": {
+        "target": "dmg",
+        "arch": [
+          "universal"
+        ]
+      },
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false
+    },
+    "files": [
+      "dist-electron/**/*",
+      "dist/**/*"
+    ]
+  },
   "dependencies": {
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@ffmpeg/util": "^0.12.2",

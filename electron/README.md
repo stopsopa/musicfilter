@@ -1,3 +1,21 @@
+# MusicFilter
+
+## Installation (macOS)
+
+1.  Go to the [Releases](https://github.com/stopsopa/musicfilter/releases) page.
+2.  Download the `.dmg` file (e.g., `MusicFilter-1.0.0-universal.dmg`).
+3.  Double-click to open.
+4.  Drag `MusicFilter` to the `Applications` folder.
+5.  **First Run**:
+    - Since this app is not signed by Apple, you might see a warning: _"MusicFilter" can't be opened because it is from an unidentified developer._
+    - To fix this:
+      1.  **Right-click** (or Control-click) the app in your Applications folder.
+      2.  Select **Open**.
+      3.  Click **Open** in the dialog box.
+    - You only need to do this once.
+
+## Development
+
 # React + TypeScript + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
@@ -17,9 +35,9 @@ If you are developing a production application, we recommend updating the config
 
 ```js
 export default defineConfig([
-  globalIgnores(['dist']),
+  globalIgnores(["dist"]),
   {
-    files: ['**/*.{ts,tsx}'],
+    files: ["**/*.{ts,tsx}"],
     extends: [
       // Other configs...
 
@@ -34,40 +52,40 @@ export default defineConfig([
     ],
     languageOptions: {
       parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
+        project: ["./tsconfig.node.json", "./tsconfig.app.json"],
         tsconfigRootDir: import.meta.dirname,
       },
       // other options...
     },
   },
-])
+]);
 ```
 
 You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
 
 ```js
 // eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+import reactX from "eslint-plugin-react-x";
+import reactDom from "eslint-plugin-react-dom";
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  globalIgnores(["dist"]),
   {
-    files: ['**/*.{ts,tsx}'],
+    files: ["**/*.{ts,tsx}"],
     extends: [
       // Other configs...
       // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
+      reactX.configs["recommended-typescript"],
       // Enable lint rules for React DOM
       reactDom.configs.recommended,
     ],
     languageOptions: {
       parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
+        project: ["./tsconfig.node.json", "./tsconfig.app.json"],
         tsconfigRootDir: import.meta.dirname,
       },
       // other options...
     },
   },
-])
+]);
 ```
