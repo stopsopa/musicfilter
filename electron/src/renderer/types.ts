@@ -5,4 +5,5 @@ export interface AudioFile {
   artist?: string;
   album?: string;
   duration?: number;
+  isDeleted?: boolean;
 }

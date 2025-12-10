@@ -93,6 +93,47 @@ app.whenReady().then(() => {
     }
   });
 
+  ipcMain.handle('soft-delete-file', async (_event, filePath) => {
+    try {
+      const dir = path.dirname(filePath);
+      const filename = path.basename(filePath);
+      const deleteDir = path.join(dir, 'delete');
+      
+      if (!fs.existsSync(deleteDir)) {
+        fs.mkdirSync(deleteDir);
+      }
+      
+      const newPath = path.join(deleteDir, filename);
+      fs.renameSync(filePath, newPath);
+      return { success: true, newPath };
+    } catch (error) {
+      console.error('Error soft deleting file:', filePath, error);
+      return { success: false, error: String(error) };
+    }
+  });
+
+  ipcMain.handle('restore-file', async (_event, filePath) => {
+    try {
+        // filePath is currently in the delete folder
+        const filename = path.basename(filePath);
+        const deleteDir = path.dirname(filePath);
+        const originalDir = path.dirname(deleteDir);
+        
+        // Sanity check that we are in a 'delete' folder
+        if (path.basename(deleteDir) !== 'delete') {
+            throw new Error('File is not in a delete folder');
+        }
+
+        const originalPath = path.join(originalDir, filename);
+        
+        fs.renameSync(filePath, originalPath);
+        return { success: true, newPath: originalPath };
+    } catch (error) {
+        console.error('Error restoring file:', filePath, error);
+        return { success: false, error: String(error) };
+    }
+  });
+
   createWindow();
 
   app.on("activate", () => {

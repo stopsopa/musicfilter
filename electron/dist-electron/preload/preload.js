@@ -16,5 +16,7 @@ electron_1.contextBridge.exposeInMainWorld('electronAPI', {
     scanDirectory: (path) => electron_1.ipcRenderer.invoke('scan-directory', path),
     getPathForFile: (file) => electron_1.webUtils.getPathForFile(file),
     getMetadata: (path) => electron_1.ipcRenderer.invoke('get-metadata', path),
-    readFileBuffer: (path) => electron_1.ipcRenderer.invoke('read-file-buffer', path)
+    readFileBuffer: (path) => electron_1.ipcRenderer.invoke('read-file-buffer', path),
+    softDeleteFile: (path) => electron_1.ipcRenderer.invoke('soft-delete-file', path),
+    restoreFile: (path) => electron_1.ipcRenderer.invoke('restore-file', path)
 });

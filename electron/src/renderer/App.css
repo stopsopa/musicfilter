@@ -102,6 +102,12 @@ body {
     background-color: #1565c0;
 }
 
+.deleted-row td {
+    opacity: 0.5;
+    text-decoration: line-through;
+    color: #888;
+}
+
 .index-col { color: #666; font-size: 11px; }
 .time-col { color: #888; font-size: 11px; text-align: right; }
 .filename-col { color: #aaa; }

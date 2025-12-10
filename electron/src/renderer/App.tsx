@@ -102,6 +102,49 @@ function App() {
             if (audioRef.current.paused) audioRef.current.play();
             else audioRef.current.pause();
         }
+    } else if (e.key === 'Backspace') {
+        e.preventDefault();
+        const file = files[selectedIndex];
+        if (!file) return;
+
+        if (file.isDeleted) {
+            // Restore
+            window.electronAPI.restoreFile(file.path).then(result => {
+                if (result.success && result.newPath) {
+                    setFiles(prev => {
+                        const newFiles = [...prev];
+                        newFiles[selectedIndex] = { 
+                            ...file, 
+                            path: result.newPath!, 
+                            isDeleted: false 
+                        };
+                        return newFiles;
+                    });
+                } else {
+                    console.error("Failed to restore:", result.error);
+                }
+            });
+        } else {
+            // Soft Delete
+            window.electronAPI.softDeleteFile(file.path).then(result => {
+                if (result.success && result.newPath) {
+                    setFiles(prev => {
+                        const newFiles = [...prev];
+                        newFiles[selectedIndex] = { 
+                            ...file, 
+                            path: result.newPath!, 
+                            isDeleted: true 
+                        };
+                        return newFiles;
+                    });
+                    // Optional: Auto-advance selection? The user didn't ask for it, 
+                    // but usually you might want to. 
+                    // Sticking to spec: just gray out.
+                } else {
+                    console.error("Failed to delete:", result.error);
+                }
+            });
+        }
     }
   };
 
@@ -237,7 +280,7 @@ function App() {
                     <tr 
                         key={file.path} 
                         id={`file-row-${index}`}
-                        className={selectedIndex === index ? 'selected' : ''}
+                        className={`${selectedIndex === index ? 'selected' : ''} ${file.isDeleted ? 'deleted-row' : ''}`}
                         onClick={() => setSelectedIndex(index)}
                     >
                         <td className="index-col">{index + 1}</td>
