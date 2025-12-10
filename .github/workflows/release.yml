@@ -37,8 +37,14 @@ jobs:
         run: |
           # Determine the version string to use
           REF_NAME=${{ inputs.tag_name || github.ref_name }}
+          # We strictly need to strip the 'v' prefix (v1.0.0 -> 1.0.0) for valid package.json versioning
           VERSION=${REF_NAME#v}
           echo "Setting version to $VERSION"
+
+          # MAGIC STEP 1: Update package.json version locally
+          # We use --no-git-tag-version so it changes the file on disk BUT DOES NOT commit it.
+          # This allows electron-builder to see the correct version (e.g. 1.0.1) instead of 0.0.0-dev
+          # without creating messy "Bump version" commits in your git history.
           npm version $VERSION --no-git-tag-version
 
       - name: Build React App and Main Process
@@ -49,4 +55,10 @@ jobs:
         working-directory: ./electron
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # MAGIC STEP 2: Publish to GitHub
+        # - electron-builder reads the version from package.json (set in step above)
+        # - It packages the app (creating .dmg because of "mac": { "target": "dmg" } in package.json)
+        # - It uploads the .dmg to the EXISTING GitHub Release that matches this version.
+        # Note: The Release MUST already exist (created by semantic-release in the previous workflow)
+        # for this step to succeed.
         run: npx electron-builder --mac --publish always
