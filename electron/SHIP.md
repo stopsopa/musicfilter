@@ -6,55 +6,28 @@ Prepare the `MusicFilter` Electron application for simple installation by end-us
 
 ## Strategy
 
-1.  **Configuration**: Use `electron-builder` (already in devDependencies).
-2.  **Architecture**: Use **Universal** binaries for macOS. This allows a single `.dmg` file to work on both Intel and Apple Silicon (M1/M2/M3) Macs. This is the simplest approach for users.
-3.  **Automation**: GitHub Actions to build and upload assets whenever a new version tag (e.g., `v1.0.0`) is pushed.
-4.  **Distribution**: GitHub Releases.
+1.  **Release Drafter**: Automatically creates a "Draft Release" with categorized changelogs (Features, Fixes, etc.) based on PRs.
+2.  **UI Driven Release**: Maintainer reviews the draft in GitHub Releases UI and clicks "Publish".
+3.  **Automation**: "Publish" action triggers the build workflow.
+4.  **Architecture**: Universal binaries (x64/arm64) for macOS.
 
 ## 1. Prepare `package.json`
 
-We need to add a `build` configuration object to `electron/package.json`.
-
-```json
-"build": {
-  "appId": "com.stopsopa.musicfilter",
-  "productName": "MusicFilter",
-  "directories": {
-    "output": "release"
-  },
-  "mac": {
-    "category": "public.app-category.music",
-    "target": {
-      "target": "dmg",
-      "arch": [
-        "universal"
-      ]
-    },
-    "hardenedRuntime": true,
-    "gatekeeperAssess": false
-  },
-  "files": [
-    "dist-electron/**/*",
-    "dist/**/*"
-  ]
-}
-```
-
-_Note: Without an Apple Developer ID ($99/yr), the app will be unsigned. Users will have to right-click (Control-click) and choose "Open" the first time to bypass Gatekeeper._
+(Completed) `electron-builder` configured for universal dmg.
 
 ## 2. GitHub Actions Workflow
 
-Create `.github/workflows/release.yml`.
+- `.github/workflows/release-drafter.yml`: Updates the draft release on every merge to `main`.
+- `.github/workflows/release.yml`: Triggered when a release is **published**. Builds and uploads assets.
 
-- **Trigger**: Push to tags `v*`.
-- **Job**: `build-mac`
-- **Steps**:
-  - Checkout code.
-  - Setup Node.
-  - Install dependencies.
-  - Run build (`npm run build`).
-  - Run release (`electron-builder --publish always`).
-    - Requires `GH_TOKEN` (automatically provided by GitHub Actions).
+## 3. How to Release
+
+1.  **Merge Changes**: Merge PRs to `main`. `release-drafter` will automatically update the draft release with new entries.
+2.  **Review**: Go to [Releases](../../releases). Edit the draft if needed (e.g., adjust version number sequence).
+3.  **Publish**: Click **Publish release**.
+    - This creates the tag (e.g., `v1.0.0`).
+    - Triggers the build workflow.
+    - Uploads `MusicFilter-*-universal.dmg` to the release.
 
 ## 3. Installation Instructions for Users
 
