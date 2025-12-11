@@ -90,3 +90,5 @@ jobs:
     with:
       tag_name: ${{ needs.bump.outputs.new_tag }}
     secrets: inherit
+
+    
