@@ -1,46 +1,58 @@
-name: Bump Version
+name: Build & Release Pipeline
 
 on:
-  workflow_dispatch:
-    inputs:
-      branch:
-        description: "Branch to release from"
-        required: true
-        default: "main"
+  push:
+    branches: ["main"]
 
 permissions:
-  contents: write # to push commits and tags
-  issues: write # to comment on issues
-  pull-requests: write # to comment on PRs
+  contents: write
+  issues: write
+  pull-requests: write
 
 jobs:
-  bump:
-    name: Suggest Version & Draft Release
+  # STEP 1: Always Run Tests
+  test:
+    name: 🧪 Run Tests
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Tests
+        run: echo "Mocking tests... Success!"
+
+  # STEP 2: The "Gatekeeper" Job
+  # This job will PAUSE here and wait for you to click "Review deployments" in GitHub Actions UI.
+  # You MUST configure this in GitHub Repo Settings > Environments.
+  bump:
+    name: 🚀 Bump Version
+    needs: test
+    runs-on: ubuntu-latest
+    environment: production # <--- This is what triggers the pause/approval UI
     defaults:
       run:
         working-directory: ./electron
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    outputs:
+      new_tag: ${{ steps.release.outputs.new_tag }}
+      released: ${{ steps.release.outputs.released }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ inputs.branch }}
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22 # Updated to 22 for semantic-release compatibility
+          node-version: 22
           cache: "npm"
           cache-dependency-path: electron/package-lock.json
 
       - name: Install Dependencies
         run: npm ci
 
-      - name: Bump Version & Draft Release
+      - name: Semantic Release
         id: release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # 1.1 Detection Strategy:
           # semantic-release doesn't easily output "I just created v1.0.1". 
@@ -69,20 +81,12 @@ jobs:
             echo "No new release created"
             echo "released=false" >> $GITHUB_OUTPUT
           fi
-    outputs:
-      # 2. Capture outputs from the step above so they can be derived by other jobs
-      new_tag: ${{ steps.release.outputs.new_tag }}
-      released: ${{ steps.release.outputs.released }}
 
-  # 3. Trigger the actual build & release workflow
-  # This uses "Reusable Workflows" (workflow_call) which works even with the default GITHUB_TOKEN
-  trigger-release:
+  # STEP 3: Build & Publish (Only if Step 2 released something)
+  build-release:
     needs: bump
-    # Only run if a new release was actually created
     if: needs.bump.outputs.released == 'true'
-    # Call the local release.yml file directly
     uses: ./.github/workflows/release.yml
     with:
-      # Pass the newly created tag to the release workflow so it checks out the correct code
       tag_name: ${{ needs.bump.outputs.new_tag }}
     secrets: inherit
