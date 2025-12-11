@@ -1,6 +1,10 @@
 name: Release Build
 
 on:
+  # Trigger 1: Global Event Listener
+  # This waits for a GitHub global event. Specifically, when someone (or a bot using a Personal Access Token)
+  # creates a new Release in the "Releases" tab.
+  # Note: Releases created by the default GITHUB_TOKEN will NOT trigger this (to prevent recursion).
   release:
     types: [published]
   # This trigger allows this workflow to be called by other workflows (like bump-version.yml)
