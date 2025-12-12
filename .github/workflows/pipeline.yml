@@ -21,7 +21,15 @@ jobs:
 
   # STEP 2: The "Gatekeeper" Job
   # This job will PAUSE here and wait for you to click "Review deployments" in GitHub Actions UI.
-  # You MUST configure this in GitHub Repo Settings > Environments.
+  # You MUST configure this in GitHub Repo Settings > Environments:
+  # 1. Go to your GitHub Repository.
+  # 2. Click Settings > Environments (sidebar).
+  # 3. Click "New environment".
+  # 4. Name it: production (Must match the name I used in the YAML).
+  # 5. Click "Configure environment".
+  # 6. Check "Required reviewers".
+  # 7. Add yourself (stopsopa) as a required reviewer.
+  # 8. Click "Save protection rules".
   bump:
     name: 🚀 Bump Version
     needs: test
@@ -90,5 +98,3 @@ jobs:
     with:
       tag_name: ${{ needs.bump.outputs.new_tag }}
     secrets: inherit
-
-    
