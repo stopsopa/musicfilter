@@ -69,6 +69,9 @@ jobs:
         # Note: The Release MUST already exist (created by semantic-release in the previous workflow)
         # for this step to succeed.
         run: npx electron-builder --mac --publish always
+        # warning: in order to avoid issue in this step:
+        # GitHub release not created  reason=existing type not compatible with publishing type tag=v1.4.1 version=1.4.1 existingType=release publishingType=draft
+        # it is needed to add to package.json "publish": { "provider": "github", "releaseType": "release" }
 
       # Failsafe: Upload artifact to Actions Run as well
       # This ensures you can access the binary even if the Github Release upload fails
