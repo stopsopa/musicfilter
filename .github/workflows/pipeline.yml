@@ -19,8 +19,18 @@ jobs:
       - name: Run Tests
         run: echo "Mocking tests... Success!"
 
-  # STEP 2: Dev/QA Build
-  # This job will PAUSE here and wait for you to click "Review deployments" for the 'development' environment.
+  # STEP 2a: Test Build (Optional Fork)
+  # Pauses on 'test' environment.
+  test-build:
+    name: 🧪 Test Build
+    needs: test
+    runs-on: ubuntu-latest
+    environment: test # <--- Pauses here!
+    steps:
+      - run: echo "This is a dummy test deployment triggered by approval."
+
+  # STEP 2b: Dev/QA Build (Main Fork)
+  # Pauses on 'development' environment.
   #
   # 🚨 CONFIGURATION REQUIRED:
   # You MUST configure TWO environments in GitHub Repo Settings > Environments:
