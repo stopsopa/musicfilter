@@ -1,0 +1,45 @@
+name: Demo - Multiple Choice Decisions
+
+on:
+  workflow_dispatch:
+
+jobs:
+  # 1. Common Setup (Build, Test, etc.)
+  setup:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Build successful! Ready to choose a target."
+
+  # 2. Parallel Options (The Decision Menu 🎋)
+  # Each job pauses on its own Environment.
+  # You approve ONLY the one(s) you want to run.
+
+  deploy-us:
+    name: 🇺🇸 Deploy US
+    needs: setup
+    runs-on: ubuntu-latest
+    environment: demo-us # <--- Pauses here!
+    steps:
+      - run: |
+          echo "Simulating deployment to US Region..."
+          echo "Configuration: US-EAST-1"
+
+  deploy-eu:
+    name: 🇪🇺 Deploy EU
+    needs: setup
+    runs-on: ubuntu-latest
+    environment: demo-eu # <--- Pauses here!
+    steps:
+      - run: |
+          echo "Simulating deployment to EU Region..."
+          echo "Configuration: EU-WEST-1"
+
+  deploy-global:
+    name: 🌍 Deploy Global
+    needs: setup
+    runs-on: ubuntu-latest
+    environment: demo-global # <--- Pauses here!
+    steps:
+      - run: |
+          echo "Simulating GLOBAL rollout..."
+          echo "Configuration: ALL-REGIONS"
