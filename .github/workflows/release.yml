@@ -15,6 +15,9 @@ on:
         required: false
         type: string
 
+permissions:
+  contents: write
+
 jobs:
   build-mac:
     runs-on: macos-latest
@@ -66,6 +69,16 @@ jobs:
         # Note: The Release MUST already exist (created by semantic-release in the previous workflow)
         # for this step to succeed.
         run: npx electron-builder --mac --publish always
+
+      # Failsafe: Upload artifact to Actions Run as well
+      # This ensures you can access the binary even if the Github Release upload fails
+      - name: Upload Release Artifact (Backup)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-dmg
+          path: electron/release/*.dmg
+          retention-days: 5
 
       - name: 📢 Release Summary
         if: success()
