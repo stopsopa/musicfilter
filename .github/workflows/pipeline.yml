@@ -19,22 +19,61 @@ jobs:
       - name: Run Tests
         run: echo "Mocking tests... Success!"
 
-  # STEP 2: The "Gatekeeper" Job
-  # This job will PAUSE here and wait for you to click "Review deployments" in GitHub Actions UI.
-  # You MUST configure this in GitHub Repo Settings > Environments:
-  # 1. Go to your GitHub Repository.
-  # 2. Click Settings > Environments (sidebar).
-  # 3. Click "New environment".
-  # 4. Name it: production (Must match the name I used in the YAML).
-  # 5. Click "Configure environment".
-  # 6. Check "Required reviewers".
-  # 7. Add yourself (stopsopa) as a required reviewer.
-  # 8. Click "Save protection rules".
-  bump:
-    name: 🚀 Bump Version
+  # STEP 2: Dev/QA Build
+  # This job will PAUSE here and wait for you to click "Review deployments" for the 'development' environment.
+  #
+  # 🚨 CONFIGURATION REQUIRED:
+  # You MUST configure TWO environments in GitHub Repo Settings > Environments:
+  #
+  # 1. 'development' (For QA Build)
+  #    - Go to Settings > Environments > New environment > Name: development
+  #    - Configure environment > Check "Required reviewers" > Add yourself (stopsopa)
+  #    - Save protection rules
+  #
+  # 2. 'production' (For Official Release)
+  #    - Go to Settings > Environments > New environment > Name: production
+  #    - Configure environment > Check "Required reviewers" > Add yourself (stopsopa)
+  #    - Save protection rules
+  qa-build:
+    name: 🚧 QA Build (Dev)
     needs: test
+    runs-on: macos-latest # Run on Mac to build DMG
+    environment: development # <--- Pauses here!
+    defaults:
+      run:
+        working-directory: ./electron
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+          cache-dependency-path: electron/package-lock.json
+
+      - run: npm ci
+      - run: npm run build
+
+      # Build DMG but DO NOT publish to GitHub Releases yet.
+      # We upload it as a "Workflow Artifact" instead.
+      - name: Build DMG for QA
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --mac --publish never
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-release-dmg
+          path: electron/release/*.dmg
+          retention-days: 1
+
+  # STEP 3: The "Gatekeeper" for Production
+  # Pauses on 'production' environment.
+  bump:
+    name: 🚀 Bump Version (Prod)
+    needs: qa-build # <--- Depends on QA passing!
     runs-on: ubuntu-latest
-    environment: production # <--- This is what triggers the pause/approval UI
+    environment: production # <--- Pauses here!
     defaults:
       run:
         working-directory: ./electron
@@ -90,7 +129,7 @@ jobs:
             echo "released=false" >> $GITHUB_OUTPUT
           fi
 
-  # STEP 3: Build & Publish (Only if Step 2 released something)
+  # STEP 4: Build & Publish (Only if Step 3 released something)
   build-release:
     needs: bump
     if: needs.bump.outputs.released == 'true'
