@@ -93,3 +93,5 @@ jobs:
           echo "### 🚀 Release Published Successfully!" >> $GITHUB_STEP_SUMMARY
           echo "You can view the release and download the DMG here:" >> $GITHUB_STEP_SUMMARY
           echo "👉 [**$TAG_NAME**]($RELEASE_URL)" >> $GITHUB_STEP_SUMMARY
+
+          
