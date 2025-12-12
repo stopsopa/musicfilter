@@ -1,14 +1,42 @@
-name: Demo - Multiple Choice Decisions
+name: Demo - Manual Inputs & Choices
 
 on:
   workflow_dispatch:
+    inputs:
+      # 1. Dropdown (Choice) - Replaces Radio Buttons
+      target_region:
+        description: "Target Region"
+        required: true
+        default: "us-east-1"
+        type: choice
+        options:
+          - us-east-1
+          - eu-west-1
+          - ap-southeast-2
+
+      # 2. Checkbox (Boolean)
+      enable_debug:
+        description: "Enable Debug Logging?"
+        required: false
+        default: false
+        type: boolean
+
+      # 3. Text Input (String)
+      release_notes:
+        description: "Custom Release Note"
+        required: false
+        default: "Manual deploy"
+        type: string
 
 jobs:
-  # 1. Common Setup (Build, Test, etc.)
-  setup:
+  # 1. Show Inputs
+  display-inputs:
     runs-on: ubuntu-latest
     steps:
-      - run: echo "Build successful! Ready to choose a target."
+      - run: |
+          echo "Selected Region: ${{ inputs.target_region }}"
+          echo "Debug Enabled: ${{ inputs.enable_debug }}"
+          echo "Notes: ${{ inputs.release_notes }}"
 
   # 2. Parallel Options (The Decision Menu 🎋)
   # Each job pauses on its own Environment.
@@ -16,7 +44,7 @@ jobs:
 
   deploy-us:
     name: 🇺🇸 Deploy US
-    needs: setup
+    needs: display-inputs
     runs-on: ubuntu-latest
     environment: demo-us # <--- Pauses here!
     steps:
@@ -26,7 +54,7 @@ jobs:
 
   deploy-eu:
     name: 🇪🇺 Deploy EU
-    needs: setup
+    needs: display-inputs
     runs-on: ubuntu-latest
     environment: demo-eu # <--- Pauses here!
     steps:
@@ -36,7 +64,7 @@ jobs:
 
   deploy-global:
     name: 🌍 Deploy Global
-    needs: setup
+    needs: display-inputs
     runs-on: ubuntu-latest
     environment: demo-global # <--- Pauses here!
     steps:
