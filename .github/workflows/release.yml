@@ -73,8 +73,18 @@ jobs:
         # GitHub release not created  reason=existing type not compatible with publishing type tag=v1.4.1 version=1.4.1 existingType=release publishingType=draft
         # it is needed to add to package.json "publish": { "provider": "github", "releaseType": "release" }
 
+      # Imperative Upload of package.json to Release Page
+      - name: Upload package.json to Release Page
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG_NAME=${{ inputs.tag_name || github.ref_name }}
+          gh release upload $TAG_NAME package.json --clobber
+          # gh release upload $TAG_NAME .github/workflows/* --clobber
+
       # Failsafe: Upload artifact to Actions Run as well
       # This ensures you can access the binary even if the Github Release upload fails
+      # WARNING: this will upload to action page not to release page - so we don't need that here
       # - name: Upload Release Artifact (Backup)
       #   if: always()
       #   uses: actions/upload-artifact@v4
@@ -82,13 +92,6 @@ jobs:
       #     name: release-dmg
       #     path: electron/release/*.dmg
       #     retention-days: 5
-      - name: Upload Release Artifact (Backup)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-dmg
-          path: electron/package.json
-          retention-days: 5
 
       - name: 📢 Release Summary
         if: success()
