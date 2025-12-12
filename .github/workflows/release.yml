@@ -66,3 +66,14 @@ jobs:
         # Note: The Release MUST already exist (created by semantic-release in the previous workflow)
         # for this step to succeed.
         run: npx electron-builder --mac --publish always
+
+      - name: 📢 Release Summary
+        if: success()
+        run: |
+          TAG_NAME=${{ inputs.tag_name || github.ref_name }}
+          REPO_URL="https://github.com/${{ github.repository }}"
+          RELEASE_URL="$REPO_URL/releases/tag/$TAG_NAME"
+
+          echo "### 🚀 Release Published Successfully!" >> $GITHUB_STEP_SUMMARY
+          echo "You can view the release and download the DMG here:" >> $GITHUB_STEP_SUMMARY
+          echo "👉 [**$TAG_NAME**]($RELEASE_URL)" >> $GITHUB_STEP_SUMMARY
