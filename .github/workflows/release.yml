@@ -75,12 +75,19 @@ jobs:
 
       # Failsafe: Upload artifact to Actions Run as well
       # This ensures you can access the binary even if the Github Release upload fails
+      # - name: Upload Release Artifact (Backup)
+      #   if: always()
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: release-dmg
+      #     path: electron/release/*.dmg
+      #     retention-days: 5
       - name: Upload Release Artifact (Backup)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: release-dmg
-          path: electron/release/*.dmg
+          path: electron/package.json
           retention-days: 5
 
       - name: 📢 Release Summary
@@ -93,5 +100,3 @@ jobs:
           echo "### 🚀 Release Published Successfully!" >> $GITHUB_STEP_SUMMARY
           echo "You can view the release and download the DMG here:" >> $GITHUB_STEP_SUMMARY
           echo "👉 [**$TAG_NAME**]($RELEASE_URL)" >> $GITHUB_STEP_SUMMARY
-
-          
