@@ -134,7 +134,8 @@ jobs:
       #     retention-days: 5
 
       - name: 🔍 State Check (Final)
-        run: env | grep "STEP_" | sort
+        run: |
+          env | grep "STEP_" | sort
 
       - name: 📢 Release Summary
         if: success()

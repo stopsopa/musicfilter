@@ -66,7 +66,8 @@ jobs:
     environment: test # <--- Pauses here!
     steps:
       - name: 🔍 State Check
-        run: echo "GITHUB_ENV path: >$GITHUB_ENV<"
+        run: |
+          echo "GITHUB_ENV path: >$GITHUB_ENV<"
 
       - run: echo "This is a dummy test deployment triggered by approval."
 
@@ -149,7 +150,8 @@ jobs:
           retention-days: 1
 
       - name: 🔍 State Check (Final)
-        run: env | grep "STEP_" | sort
+        run: |
+          env | grep "STEP_" | sort
 
   # STEP 3: The "Gatekeeper" for Production
   # Pauses on 'production' environment.
@@ -235,7 +237,8 @@ jobs:
           fi
 
       - name: 🔍 State Check (Final)
-        run: env | grep "STEP_" | sort
+        run: |
+          env | grep "STEP_" | sort
 
   # STEP 4: Build & Publish (Only if Step 3 released something)
   build-release:
