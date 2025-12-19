@@ -21,21 +21,41 @@ jobs:
     name: 📝 Debug Info
     runs-on: ubuntu-latest
     steps:
-      - name: Dump context
+      - name: 📝 Debug Context
         run: |
-          echo "Triggered by: ${{ github.event_name }}"
-          echo "Manual run reason: ${{ inputs.manual_run_reason }}"
-          echo "Ref: ${{ github.ref }}"
-          echo "Ref Name: ${{ github.ref_name }}"
+          echo "### Pipeline Context ###"
+          echo "Triggered by: >${{ github.event_name }}<"
+          echo "Manual reason: >${{ inputs.manual_run_reason }}<"
+          echo "Ref: >${{ github.ref_name }}<"
+          echo "--- Environment (Filtered) ---"
+          env | grep -E "STEP_|GITHUB_" | sort
+          echo "DEMO_VAL=initialized" >> $GITHUB_ENV
+
+      - name: 📝 Post-Init Debug
+        run: |
+          echo "DEMO_VAL is now: $DEMO_VAL"
+          echo "STEP_0_COMPLETE=true" >> $GITHUB_ENV
 
   # STEP 1: Always Run Tests
   test:
     name: 🧪 Run Tests
     runs-on: ubuntu-latest
     steps:
+      - name: 📝 Step Debug (Start)
+        run: |
+          echo "### Test Job Initial State ###"
+          env | grep -E "STEP_|GITHUB_" || echo "No markers yet"
+
       - uses: actions/checkout@v4
-      - name: Run Tests
-        run: echo "Mocking tests... Success!"
+
+      - name: 🧪 Run Tests
+        run: |
+          echo "Mocking tests... Success!"
+          echo "STEP_TEST_COMPLETE=true" >> $GITHUB_ENV
+
+      - name: 📝 Step Debug (End)
+        run: |
+          echo "Markers after test: STEP_TEST_COMPLETE=$STEP_TEST_COMPLETE"
 
   # STEP 2a: Test Build (Optional Fork)
   # Pauses on 'test' environment.
@@ -45,6 +65,9 @@ jobs:
     runs-on: ubuntu-latest
     environment: test # <--- Pauses here!
     steps:
+      - name: 🔍 State Check
+        run: echo "GITHUB_ENV path: >$GITHUB_ENV<"
+
       - run: echo "This is a dummy test deployment triggered by approval."
 
   # STEP 2b: Dev/QA Build (Main Fork)
@@ -71,22 +94,52 @@ jobs:
       run:
         working-directory: ./electron
     steps:
+      - name: 🔍 State Check (1)
+        run: |
+          echo "GITHUB_ENV path: >$GITHUB_ENV<"
+          env | grep "STEP_" | sort || echo "No STEP markers yet"
+
       - uses: actions/checkout@v4
+
+      - name: 🔍 State Check (2)
+        run: |
+          echo "STEP_QA_CHECKOUT=true" >> $GITHUB_ENV
+          env | grep "STEP_" | sort
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: "npm"
           cache-dependency-path: electron/package-lock.json
 
+      - name: 🔍 State Check (3)
+        run: |
+          echo "STEP_QA_NODE_READY=true" >> $GITHUB_ENV
+          env | grep "STEP_" | sort
+
       - run: npm ci
+
+      - name: 🔍 State Check (4)
+        run: |
+          echo "STEP_QA_DEPS_DONE=true" >> $GITHUB_ENV
+          env | grep "STEP_" | sort
+
       - run: npm run build
 
-      # Build DMG but DO NOT publish to GitHub Releases yet.
-      # We upload it as a "Workflow Artifact" instead.
+      - name: 🔍 State Check (5)
+        run: |
+          echo "STEP_QA_BUILD_DONE=true" >> $GITHUB_ENV
+          env | grep "STEP_" | sort
+
       - name: Build DMG for QA
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npx electron-builder --mac --publish never
+
+      - name: 🔍 State Check (6)
+        run: |
+          echo "STEP_QA_DMG_DONE=true" >> $GITHUB_ENV
+          env | grep "STEP_" | sort
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
@@ -94,6 +147,9 @@ jobs:
           name: qa-release-dmg
           path: electron/release/*.dmg
           retention-days: 1
+
+      - name: 🔍 State Check (Final)
+        run: env | grep "STEP_" | sort
 
   # STEP 3: The "Gatekeeper" for Production
   # Pauses on 'production' environment.
@@ -111,10 +167,20 @@ jobs:
       new_tag: ${{ steps.release.outputs.new_tag }}
       released: ${{ steps.release.outputs.released }}
     steps:
+      - name: 🔍 State Check (1)
+        run: |
+          echo "GITHUB_ENV path: >$GITHUB_ENV<"
+          env | grep "STEP_" | sort || echo "No STEP markers yet"
+
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           persist-credentials: false
+
+      - name: 🔍 State Check (2)
+        run: |
+          echo "STEP_BUMP_CHECKOUT=true" >> $GITHUB_ENV
+          env | grep "STEP_" | sort
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -123,8 +189,18 @@ jobs:
           cache: "npm"
           cache-dependency-path: electron/package-lock.json
 
+      - name: 🔍 State Check (3)
+        run: |
+          echo "STEP_BUMP_NODE_READY=true" >> $GITHUB_ENV
+          env | grep "STEP_" | sort
+
       - name: Install Dependencies
         run: npm ci
+
+      - name: 🔍 State Check (4)
+        run: |
+          echo "STEP_BUMP_DEPS_DONE=true" >> $GITHUB_ENV
+          env | grep "STEP_" | sort
 
       - name: Semantic Release
         id: release
@@ -152,10 +228,14 @@ jobs:
             # Set outputs for the next job to see
             echo "new_tag=$NEW_TAG" >> $GITHUB_OUTPUT
             echo "released=true" >> $GITHUB_OUTPUT
+            echo "STEP_BUMP_RELEASE_CREATED=true" >> $GITHUB_ENV
           else
-            echo "No new release created"
             echo "released=false" >> $GITHUB_OUTPUT
+            echo "STEP_BUMP_RELEASE_SKIPPED=true" >> $GITHUB_ENV
           fi
+
+      - name: 🔍 State Check (Final)
+        run: env | grep "STEP_" | sort
 
   # STEP 4: Build & Publish (Only if Step 3 released something)
   build-release:
