@@ -14,6 +14,12 @@ on:
         description: "The tag to release (e.g. v1.0.0). Defaults to github.ref_name."
         required: false
         type: string
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "The tag to release (e.g. v1.0.0). Defaults to github.ref_name."
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -21,12 +27,24 @@ permissions:
 jobs:
   build-mac:
     runs-on: macos-latest
+    env:
+      # Precedence:
+      # 1. inputs.tag_name (if provided via workflow_dispatch or workflow_call)
+      # 2. github.ref_name (fallback for release:published or manual run without input)
+      RELEASE_TAG: ${{ inputs.tag_name || github.ref_name }}
+
     steps:
+      - name: 📝 Debug Information
+        run: |
+          echo "Triggered by: ${{ github.event_name }}"
+          echo "Input tag_name: ${{ inputs.tag_name }}"
+          echo "Current ref_name: ${{ github.ref_name }}"
+          echo "Resolved RELEASE_TAG: ${{ env.RELEASE_TAG }}"
+
       - uses: actions/checkout@v4
         with:
-          # If called via workflow_call, use the passed input.tag_name
-          # If triggered via release:published, use the default github.ref
-          ref: ${{ inputs.tag_name || github.ref }}
+          # Use the resolved RELEASE_TAG for checkout
+          ref: ${{ env.RELEASE_TAG }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -42,8 +60,8 @@ jobs:
       - name: Sync version from tag
         working-directory: ./electron
         run: |
-          # Determine the version string to use
-          REF_NAME=${{ inputs.tag_name || github.ref_name }}
+          # Use the resolved RELEASE_TAG
+          REF_NAME=${{ env.RELEASE_TAG }}
           # We strictly need to strip the 'v' prefix (v1.0.0 -> 1.0.0) for valid package.json versioning
           VERSION=${REF_NAME#v}
           echo "Setting version to $VERSION"
@@ -78,7 +96,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG_NAME=${{ inputs.tag_name || github.ref_name }}
+          TAG_NAME=${{ env.RELEASE_TAG }}
           gh release upload $TAG_NAME package.json --clobber
           # gh release upload $TAG_NAME .github/workflows/* --clobber
 
@@ -96,7 +114,7 @@ jobs:
       - name: 📢 Release Summary
         if: success()
         run: |
-          TAG_NAME=${{ inputs.tag_name || github.ref_name }}
+          TAG_NAME=${{ env.RELEASE_TAG }}
           REPO_URL="https://github.com/${{ github.repository }}"
           RELEASE_URL="$REPO_URL/releases/tag/$TAG_NAME"
 
