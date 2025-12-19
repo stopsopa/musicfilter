@@ -22,7 +22,7 @@ jobs:
   # STEP 2a: Test Build (Optional Fork)
   # Pauses on 'test' environment.
   test-build:
-    name: 🧪 Test Build
+    name: 🍴 Test Build - Fork test
     needs: test
     runs-on: ubuntu-latest
     environment: test # <--- Pauses here!
