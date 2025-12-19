@@ -11,13 +11,13 @@ on:
   workflow_call:
     inputs:
       tag_name:
-        description: "The tag to release (e.g. v1.0.0). Defaults to github.ref_name."
+        description: "The tag to release (e.g. v1.0.0). Defaults to the tag/branch selected in 'Use workflow from'."
         required: false
         type: string
   workflow_dispatch:
     inputs:
-      tag_name:
-        description: "The tag to release (e.g. v1.0.0). Defaults to github.ref_name."
+      manual_run_reason:
+        description: "Reason for manual release (optional)"
         required: false
         type: string
 
@@ -29,14 +29,15 @@ jobs:
     runs-on: macos-latest
     env:
       # Precedence:
-      # 1. inputs.tag_name (if provided via workflow_dispatch or workflow_call)
-      # 2. github.ref_name (fallback for release:published or manual run without input)
+      # 1. inputs.tag_name (if provided via workflow_call)
+      # 2. github.ref_name (fallback for release:published or manual workflow_dispatch run)
       RELEASE_TAG: ${{ inputs.tag_name || github.ref_name }}
 
     steps:
       - name: 📝 Debug Information
         run: |
           echo "Triggered by: ${{ github.event_name }}"
+          echo "Input manual_run_reason: ${{ inputs.manual_run_reason }}"
           echo "Input tag_name: ${{ inputs.tag_name }}"
           echo "Current ref_name: ${{ github.ref_name }}"
           echo "Resolved RELEASE_TAG: ${{ env.RELEASE_TAG }}"
