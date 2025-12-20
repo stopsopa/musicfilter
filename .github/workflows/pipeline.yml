@@ -122,15 +122,15 @@ jobs:
       run:
         working-directory: ./electron
     steps:
-      - name: 🔍 Audit
-        run: |
-          echo "ENV Path: $GITHUB_ENV"
-          env | grep -E "STEP_|GITHUB_|RELEASE_TAG" | sort
-
       - uses: actions/checkout@v4
         with:
           # Use the resolved RELEASE_TAG for checkout
           ref: ${{ env.RELEASE_TAG }}
+
+      - name: 🔍 Audit
+        run: |
+          echo "ENV Path: $GITHUB_ENV"
+          env | grep -E "STEP_|GITHUB_|RELEASE_TAG" | sort
 
       - name: 🔍 State Check (2)
         run: |
@@ -176,8 +176,6 @@ jobs:
       new_tag: ${{ steps.release.outputs.new_tag }}
       released: ${{ steps.release.outputs.released }}
     steps:
-      - name: 🔍 Audit
-        run: env | grep -E "STEP_|GITHUB_|RELEASE_TAG" | sort
 
       - uses: actions/checkout@v4
         with:
@@ -185,6 +183,9 @@ jobs:
           ref: ${{ env.RELEASE_TAG }}
           fetch-depth: 0
           persist-credentials: false
+          
+      - name: 🔍 Audit
+        run: env | grep -E "STEP_|GITHUB_|RELEASE_TAG" | sort
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
