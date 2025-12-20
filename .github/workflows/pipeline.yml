@@ -47,7 +47,7 @@ jobs:
       - name: 📝 Step Debug (Start)
         run: |
           echo "### Test Job Initial State ###"
-          env | grep -E "STEP_|GITHUB_|RELEASE_TAG" || echo "No markers yet"
+          env | grep -E "STEP_|GITHUB_|RELEASE_TAG" | sort
 
       - uses: actions/checkout@v4
         with:
@@ -73,7 +73,7 @@ jobs:
     steps:
       - name: 🔍 State Check
         run: |
-          env | grep -E "STEP_|GITHUB_|RELEASE_TAG" || echo "No markers yet"
+          env | grep -E "STEP_|GITHUB_|RELEASE_TAG" | sort
           echo "GITHUB_ENV path: >$GITHUB_ENV<"
 
       - run: echo "This is a dummy test deployment triggered by approval."
