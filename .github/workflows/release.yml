@@ -72,6 +72,7 @@ jobs:
         # it is needed to add to package.json "publish": { "provider": "github", "releaseType": "release" }
 
       - name: 📤 Upload Additional Assets
+        working-directory: ./electron
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
