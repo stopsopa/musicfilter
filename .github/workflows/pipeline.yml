@@ -43,6 +43,11 @@ jobs:
     name: 🧪 Run Tests
     runs-on: ubuntu-latest
     needs: debug
+    # CROSS-JOB STATE (The "Anouncer"):
+    # To pass data to other jobs, you MUST declare them here.
+    # It maps a step's internal output to a job-level output.
+    outputs:
+      test_complete: ${{ steps.unit_tests.outputs.test_complete }}
     steps:
       - name: 📝 Step Debug (Start)
         run: |
@@ -55,9 +60,14 @@ jobs:
           ref: ${{ env.RELEASE_TAG }}
 
       - name: 🧪 Run Tests
+        id: unit_tests
         run: |
           echo "Mocking tests... Success!"
           echo "STEP_TEST_COMPLETE=true" >> $GITHUB_ENV
+
+          # CROSS-JOB STATE (The "Pitcher"):
+          # Echoing to $GITHUB_OUTPUT makes the value available to the job's 'outputs' section above.
+          echo "test_complete=true" >> $GITHUB_OUTPUT
 
       - name: 📝 Step Debug (End)
         run: |
@@ -71,6 +81,11 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     environment: test # <--- Pauses here!
+    # CROSS-JOB STATE (The "Catcher"):
+    # Since this is a fresh machine, we must 'catch' the output from the 'test' job
+    # and map it back into this job's environment.
+    env:
+      STEP_TEST_COMPLETE: ${{ needs.test.outputs.test_complete }}
     steps:
       - name: 🔍 State Check
         run: |
@@ -99,6 +114,10 @@ jobs:
     needs: test
     runs-on: macos-latest # Run on Mac to build DMG
     environment: development # <--- Pauses here!
+    # CROSS-JOB STATE (The "Catcher"):
+    # Mapping the test result here so the Audit dump below can see it.
+    env:
+      STEP_TEST_COMPLETE: ${{ needs.test.outputs.test_complete }}
     defaults:
       run:
         working-directory: ./electron
