@@ -38,10 +38,6 @@ jobs:
           env | grep -E "STEP_|GITHUB_" | sort
           echo "DEMO_VAL=initialized" >> $GITHUB_ENV
 
-      - name: 📝 Post-Init Debug
-        run: |
-          echo "DEMO_VAL is now: $DEMO_VAL"
-          echo "STEP_0_COMPLETE=true" >> $GITHUB_ENV
 
   # STEP 1: Always Run Tests
   test:
@@ -106,10 +102,10 @@ jobs:
       run:
         working-directory: ./electron
     steps:
-      - name: 🔍 State Check (1)
+      - name: 🔍 Audit
         run: |
-          echo "GITHUB_ENV path: >$GITHUB_ENV<"
-          env | grep "STEP_" | sort || echo "No STEP markers yet"
+          echo "ENV Path: $GITHUB_ENV"
+          env | grep -E "STEP_|GITHUB_" | sort
 
       - uses: actions/checkout@v4
         with:
@@ -127,45 +123,23 @@ jobs:
           cache: "npm"
           cache-dependency-path: electron/package-lock.json
 
-      - name: 🔍 State Check (3)
+      - name: 📦 Install & Build
         run: |
-          echo "STEP_QA_NODE_READY=true" >> $GITHUB_ENV
-          env | grep "STEP_" | sort
+          npm ci
+          npm run build
 
-      - run: npm ci
-
-      - name: 🔍 State Check (4)
-        run: |
-          echo "STEP_QA_DEPS_DONE=true" >> $GITHUB_ENV
-          env | grep "STEP_" | sort
-
-      - run: npm run build
-
-      - name: 🔍 State Check (5)
-        run: |
-          echo "STEP_QA_BUILD_DONE=true" >> $GITHUB_ENV
-          env | grep "STEP_" | sort
-
-      - name: Build DMG for QA
+      - name: 🏗️ Build DMG for QA
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npx electron-builder --mac --publish never
 
-      - name: 🔍 State Check (6)
-        run: |
-          echo "STEP_QA_DMG_DONE=true" >> $GITHUB_ENV
-          env | grep "STEP_" | sort
-
-      - name: Upload Artifacts
+      - name: 📤 Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: qa-release-dmg
           path: electron/release/*.dmg
           retention-days: 1
 
-      - name: 🔍 State Check (Final)
-        run: |
-          env | grep "STEP_" | sort
 
   # STEP 3: The "Gatekeeper" for Production
   # Pauses on 'production' environment.
@@ -183,10 +157,8 @@ jobs:
       new_tag: ${{ steps.release.outputs.new_tag }}
       released: ${{ steps.release.outputs.released }}
     steps:
-      - name: 🔍 State Check (1)
-        run: |
-          echo "GITHUB_ENV path: >$GITHUB_ENV<"
-          env | grep "STEP_" | sort || echo "No STEP markers yet"
+      - name: 🔍 Audit
+        run: env | grep -E "STEP_|GITHUB_" | sort
 
       - uses: actions/checkout@v4
         with:
@@ -195,11 +167,6 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: 🔍 State Check (2)
-        run: |
-          echo "STEP_BUMP_CHECKOUT=true" >> $GITHUB_ENV
-          env | grep "STEP_" | sort
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -207,27 +174,12 @@ jobs:
           cache: "npm"
           cache-dependency-path: electron/package-lock.json
 
-      - name: 🔍 State Check (3)
-        run: |
-          echo "STEP_BUMP_NODE_READY=true" >> $GITHUB_ENV
-          env | grep "STEP_" | sort
-
-      - name: Install Dependencies
-        run: npm ci
-
-      - name: 🔍 State Check (4)
-        run: |
-          echo "STEP_BUMP_DEPS_DONE=true" >> $GITHUB_ENV
-          env | grep "STEP_" | sort
-
-      - name: Semantic Release
+      - name: 📦 Install & Release
         id: release
         run: |
-          # 1.1 Detection Strategy:
-          # semantic-release doesn't easily output "I just created v1.0.1". 
-          # So we detect it by checking the latest git tag BEFORE and AFTER running it.
+          npm ci
 
-          # Step A: Get the latest tag present currently
+          # Detection Strategy
           git fetch --tags
           OLD_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
           echo "Old tag: $OLD_TAG"

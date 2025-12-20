@@ -20,80 +20,43 @@ permissions:
 
 jobs:
   build-mac:
+    name: 🏗️ Build (macOS)
     runs-on: macos-latest
     steps:
-      - name: 🔍 State Check (Initial)
+      - name: 🔍 Audit
         run: |
-          echo "GITHUB_ENV path: >$GITHUB_ENV<"
-          echo "--- STEP Markers ---"
-          env | grep "STEP_" | sort || echo "No STEP markers yet"
-          echo "--- Context ---"
+          echo "### Release Context ###"
           echo "Event: >${{ github.event_name }}<"
-          echo "Input tag_name: >${{ inputs.tag_name }}<"
-          echo "Ref: >${{ github.ref_name }}<"
+          echo "Tag:   >${{ inputs.tag_name }}<"
+          echo "Ref:   >${{ github.ref_name }}<"
+          echo "ENV Path: $GITHUB_ENV"
+          env | grep -E "STEP_|GITHUB_" | sort || echo "No markers yet"
 
       - uses: actions/checkout@v4
         with:
-          # If called via workflow_call, use the passed input.tag_name
-          # If triggered via release:published, use the default github.ref
           ref: ${{ inputs.tag_name || github.ref }}
-
-      - name: 🔍 State Check (After Checkout)
-        run: |
-          echo "STEP_RELEASE_CHECKOUT=true" >> $GITHUB_ENV
-          env | grep "STEP_" | sort
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22 # Updated to 22 for consistency
+          node-version: 22
           cache: "npm"
           cache-dependency-path: electron/package-lock.json
 
-      - name: 🔍 State Check (After Node)
-        run: |
-          echo "STEP_RELEASE_NODE_READY=true" >> $GITHUB_ENV
-          env | grep "STEP_" | sort
-
-      - name: Install Dependencies
-        working-directory: ./electron
-        run: npm ci
-
-      - name: 🔍 State Check (After Deps)
-        run: |
-          echo "STEP_RELEASE_DEPS_DONE=true" >> $GITHUB_ENV
-          env | grep "STEP_" | sort
-
-      - name: Sync version from tag
+      - name: 📦 Install, Build & Sync
         working-directory: ./electron
         run: |
-          # Determine the version string to use
+          npm ci
+
+          # Version Sync
           REF_NAME=${{ inputs.tag_name || github.ref_name }}
-          # We strictly need to strip the 'v' prefix (v1.0.0 -> 1.0.0) for valid package.json versioning
           VERSION=${REF_NAME#v}
-          echo "Setting version to $VERSION"
-
-          # MAGIC STEP 1: Update package.json version locally
-          # We use --no-git-tag-version so it changes the file on disk BUT DOES NOT commit it.
-          # This allows electron-builder to see the correct version (e.g. 1.0.1) instead of 0.0.0-dev
-          # without creating messy "Bump version" commits in your git history.
+          echo "Setting package.json version to $VERSION"
           npm version $VERSION --no-git-tag-version
 
-      - name: 🔍 State Check (After Sync)
-        run: |
-          echo "STEP_RELEASE_SYNC_DONE=true" >> $GITHUB_ENV
-          env | grep "STEP_" | sort
+          npm run build
 
-      - name: Build React App and Main Process
-        working-directory: ./electron
-        run: npm run build
-
-      - name: 🔍 State Check (After Build)
-        run: |
-          echo "STEP_RELEASE_BUILD_DONE=true" >> $GITHUB_ENV
-          env | grep "STEP_" | sort
-
-      - name: Build and Publish Electron App
+      - name: 🏗️ Build and Publish Electron App
         working-directory: ./electron
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -108,13 +71,7 @@ jobs:
         # GitHub release not created  reason=existing type not compatible with publishing type tag=v1.4.1 version=1.4.1 existingType=release publishingType=draft
         # it is needed to add to package.json "publish": { "provider": "github", "releaseType": "release" }
 
-      # Imperative Upload of package.json to Release Page
-      - name: 🔍 State Check (After Publish)
-        run: |
-          echo "STEP_RELEASE_PUBLISH_DONE=true" >> $GITHUB_ENV
-          env | grep "STEP_" | sort
-
-      - name: Upload package.json to Release Page
+      - name: 📤 Upload Additional Assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -132,10 +89,6 @@ jobs:
       #     name: release-dmg
       #     path: electron/release/*.dmg
       #     retention-days: 5
-
-      - name: 🔍 State Check (Final)
-        run: |
-          env | grep "STEP_" | sort
 
       - name: 📢 Release Summary
         if: success()
