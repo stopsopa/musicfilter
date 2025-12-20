@@ -30,14 +30,13 @@ jobs:
       - name: 📝 Debug Context
         run: |
           echo "### Pipeline Context ###"
-          echo "Triggered by \${{ github.event_name }}: >${{ github.event_name }}<"
-          echo "Manual reason \${{ inputs.manual_run_reason }}: >${{ inputs.manual_run_reason }}<"
-          echo "Ref: >${{ github.ref_name }}<"
-          echo "Resolved RELEASE_TAG: >${{ env.RELEASE_TAG }}<"
+          echo "Triggered by {{ github.event_name }}: >${{ github.event_name }}<"
+          echo "Manual reason {{ inputs.manual_run_reason }}: >${{ inputs.manual_run_reason }}<"
+          echo "Ref {{ github.ref_name }}: >${{ github.ref_name }}<"
+          echo "Resolved RELEASE_TAG: {{ env.RELEASE_TAG }}: >${{ env.RELEASE_TAG }}<"
           echo "--- Environment (Filtered) ---"
           env | grep -E "STEP_|GITHUB_" | sort
           echo "DEMO_VAL=initialized" >> $GITHUB_ENV
-
 
   # STEP 1: Always Run Tests
   test:
@@ -139,7 +138,6 @@ jobs:
           name: qa-release-dmg
           path: electron/release/*.dmg
           retention-days: 1
-
 
   # STEP 3: The "Gatekeeper" for Production
   # Pauses on 'production' environment.
