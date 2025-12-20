@@ -61,7 +61,8 @@ jobs:
 
       - name: 📝 Step Debug (End)
         run: |
-          echo "Markers after test: STEP_TEST_COMPLETE=$STEP_TEST_COMPLETE"
+          echo "Markers after test: STEP_TEST_COMPLETE=>$STEP_TEST_COMPLETE<"
+          env | grep -E "STEP_|GITHUB_|RELEASE_TAG" | sort
 
   # STEP 2a: Test Build (Optional Fork)
   # Pauses on 'test' environment.
