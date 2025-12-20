@@ -32,11 +32,11 @@ jobs:
           echo "### Pipeline Context ###"
           echo "Triggered by {{ github.event_name }}: >${{ github.event_name }}<"
           echo "Manual reason {{ inputs.manual_run_reason }}: >${{ inputs.manual_run_reason }}<"
-          echo "Ref {{ github.ref_name }}: >${{ github.ref_name }}<"
+          echo "Ref {{ github.ref_name }} (will be branch or tag name): >${{ github.ref_name }}<"
           echo "Resolved RELEASE_TAG: {{ env.RELEASE_TAG }}: >${{ env.RELEASE_TAG }}<"
           echo "--- Environment (Filtered) ---"
-          env | grep -E "STEP_|GITHUB_" | sort
-          echo "DEMO_VAL=initialized" >> $GITHUB_ENV
+          env | grep -E "STEP_|GITHUB_|RELEASE_TAG" | sort
+          echo "STEP_DEMO_VAL=initialized" >> $GITHUB_ENV
 
   # STEP 1: Always Run Tests
   test:
@@ -47,7 +47,7 @@ jobs:
       - name: 📝 Step Debug (Start)
         run: |
           echo "### Test Job Initial State ###"
-          env | grep -E "STEP_|GITHUB_" || echo "No markers yet"
+          env | grep -E "STEP_|GITHUB_|RELEASE_TAG" || echo "No markers yet"
 
       - uses: actions/checkout@v4
         with:
@@ -73,6 +73,7 @@ jobs:
     steps:
       - name: 🔍 State Check
         run: |
+          env | grep -E "STEP_|GITHUB_|RELEASE_TAG" || echo "No markers yet"
           echo "GITHUB_ENV path: >$GITHUB_ENV<"
 
       - run: echo "This is a dummy test deployment triggered by approval."
@@ -104,7 +105,7 @@ jobs:
       - name: 🔍 Audit
         run: |
           echo "ENV Path: $GITHUB_ENV"
-          env | grep -E "STEP_|GITHUB_" | sort
+          env | grep -E "STEP_|GITHUB_|RELEASE_TAG" | sort
 
       - uses: actions/checkout@v4
         with:
@@ -156,7 +157,7 @@ jobs:
       released: ${{ steps.release.outputs.released }}
     steps:
       - name: 🔍 Audit
-        run: env | grep -E "STEP_|GITHUB_" | sort
+        run: env | grep -E "STEP_|GITHUB_|RELEASE_TAG" | sort
 
       - uses: actions/checkout@v4
         with:
