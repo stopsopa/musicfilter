@@ -26,9 +26,9 @@ jobs:
       - name: 🔍 Audit
         run: |
           echo "### Release Context ###"
-          echo "Event: >${{ github.event_name }}<"
-          echo "Tag:   >${{ inputs.tag_name }}<"
-          echo "Ref:   >${{ github.ref_name }}<"
+          echo "Event {{ github.event_name }}: >${{ github.event_name }}<"
+          echo "Tag {{ inputs.tag_name }}:   >${{ inputs.tag_name }}<"
+          echo "Ref {{ github.ref_name }}:   >${{ github.ref_name }}<"
           echo "ENV Path: $GITHUB_ENV"
           env | grep -E "STEP_|GITHUB_" | sort || echo "No markers yet"
 
