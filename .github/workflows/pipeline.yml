@@ -30,8 +30,8 @@ jobs:
       - name: 📝 Debug Context
         run: |
           echo "### Pipeline Context ###"
-          echo "Triggered by: >${{ github.event_name }}<"
-          echo "Manual reason: >${{ inputs.manual_run_reason }}<"
+          echo "Triggered by \${{ github.event_name }}: >${{ github.event_name }}<"
+          echo "Manual reason \${{ inputs.manual_run_reason }}: >${{ inputs.manual_run_reason }}<"
           echo "Ref: >${{ github.ref_name }}<"
           echo "Resolved RELEASE_TAG: >${{ env.RELEASE_TAG }}<"
           echo "--- Environment (Filtered) ---"
