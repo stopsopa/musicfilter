@@ -18,7 +18,7 @@ permissions:
 jobs:
   # STEP 0: Debug Information
   debug:
-    name: 📝 Debug Info
+    name: 📝 Debug Info (Always Run - first but in parallel)
     runs-on: ubuntu-latest
     steps:
       - name: 📝 Debug Context
