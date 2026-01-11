@@ -2,6 +2,10 @@
 
 Just go to [Github releases](../../releases), pick the latest release, and download the binary, and install it like any other app.
 
+## Known issues:
+
+- [MusicFilter.app is damaged and can't be opened. You should move it to the Bin](https://github.com/stopsopa/musicfilter/issues/1)
+
 # Music Filter
 
 Music Filter is a lightweight desktop utility designed for efficient music library curation. It allows users to quickly preview, organize, and filter large collections of MP3 files through a streamlined, keyboard-driven interface.
