@@ -12,6 +12,7 @@ function App() {
   const [duration, setDuration] = useState(0);
   const [isTranscoding, setIsTranscoding] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isFocused, setIsFocused] = useState(true);
   const [seekingFeedback, setSeekingFeedback] = useState<'forward' | 'backward' | null>(null);
   const [columnWidths, setColumnWidths] = useState<number[]>([40, 300, 200, 150, 150, 60]);
   const resizingColumn = useRef<{ index: number; startX: number; startWidth: number } | null>(null);
@@ -77,10 +78,17 @@ function App() {
     // Register on document for maximum coverage, capture: true to win over native sliders
     document.addEventListener('keydown', handleKeyDownGlobal, true);
 
+    const handleFocus = () => setIsFocused(true);
+    const handleBlur = () => setIsFocused(false);
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('blur', handleBlur);
+
     return () => {
       window.removeEventListener('dragover', preventDefault);
       window.removeEventListener('drop', preventDefault);
       document.removeEventListener('keydown', handleKeyDownGlobal, true);
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('blur', handleBlur);
     };
   }, [files, selectedIndex, isPlaying]); // Depend on state to ensure fresh closure
 
@@ -389,6 +397,25 @@ function App() {
             </tbody>
         </table>
       </div>
+
+      <footer className="footer">
+          <div className="footer-left">
+              <div className={`focus-indicator ${isFocused ? 'focused' : 'blurred'}`} />
+              <span className="focus-text">{isFocused ? 'Focused' : 'Background'}</span>
+          </div>
+          <div className="footer-right">
+              <a 
+                href="#" 
+                onClick={(e) => {
+                    e.preventDefault();
+                    window.electronAPI.openExternal('https://github.com/stopsopa/musicfilter');
+                }}
+                className="repo-link"
+              >
+                  GitHub Repository
+              </a>
+          </div>
+      </footer>
     </div>
   );
 }

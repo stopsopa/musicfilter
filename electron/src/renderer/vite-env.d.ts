@@ -7,6 +7,7 @@ interface ElectronAPI {
   readFileBuffer: (path: string) => Promise<ArrayBuffer | null>;
   softDeleteFile: (path: string) => Promise<{ success: boolean; newPath?: string; error?: string }>;
   restoreFile: (path: string) => Promise<{ success: boolean; newPath?: string; error?: string }>;
+  openExternal: (url: string) => void;
 }
 
 interface Window {

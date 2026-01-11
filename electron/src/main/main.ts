@@ -1,5 +1,5 @@
 
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, ipcMain, shell } from "electron";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from 'url';
@@ -144,6 +144,10 @@ app.whenReady().then(() => {
         console.error('Error restoring file:', filePath, error);
         return { success: false, error: String(error) };
     }
+  });
+
+  ipcMain.on('open-external', (_event, url: string) => {
+    shell.openExternal(url);
   });
 
   createWindow();
