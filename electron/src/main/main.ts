@@ -51,6 +51,10 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  if (process.platform === 'darwin' && !app.isPackaged) {
+    app.dock?.setIcon(path.join(__dirname, "../../public/icon.png"));
+  }
+
   ipcMain.handle('scan-directory', async (event, inputPath) => {
     console.log('Main process received scan-directory for:', inputPath);
     // If it's a file, return it if supported. If dir, scan it.
