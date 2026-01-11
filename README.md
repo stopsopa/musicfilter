@@ -1,3 +1,7 @@
+## Installation from binary
+
+Just go to [Github releases](../../releases), pick the latest release, and download the binary, and install it like any other app.
+
 # Music Filter
 
 Music Filter is a lightweight desktop utility designed for efficient music library curation. It allows users to quickly preview, organize, and filter large collections of MP3 files through a streamlined, keyboard-driven interface.
