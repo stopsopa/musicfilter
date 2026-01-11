@@ -13,6 +13,8 @@ function App() {
   const [isTranscoding, setIsTranscoding] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [seekingFeedback, setSeekingFeedback] = useState<'forward' | 'backward' | null>(null);
+  const [columnWidths, setColumnWidths] = useState<number[]>([40, 300, 200, 150, 150, 60]);
+  const resizingColumn = useRef<{ index: number; startX: number; startWidth: number } | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const currentBlobUrlRef = useRef<string | null>(null);
@@ -245,6 +247,32 @@ function App() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const handleMouseDown = (e: React.MouseEvent, index: number) => {
+    e.preventDefault();
+    resizingColumn.current = {
+      index,
+      startX: e.clientX,
+      startWidth: columnWidths[index],
+    };
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+
+  const handleMouseMove = (e: MouseEvent) => {
+    if (!resizingColumn.current) return;
+    const { index, startX, startWidth } = resizingColumn.current;
+    const deltaX = e.clientX - startX;
+    const newWidths = [...columnWidths];
+    newWidths[index] = Math.max(20, startWidth + deltaX);
+    setColumnWidths(newWidths);
+  };
+
+  const handleMouseUp = () => {
+    resizingColumn.current = null;
+    document.removeEventListener('mousemove', handleMouseMove);
+    document.removeEventListener('mouseup', handleMouseUp);
+  };
+
   return (
     <div 
         ref={containerRef}
@@ -316,12 +344,30 @@ function App() {
         <table className="file-table">
             <thead>
                 <tr>
-                    <th style={{ width: '40px' }}>#</th>
-                    <th>Filename</th>
-                    <th>Title</th>
-                    <th>Artist</th>
-                    <th>Album</th>
-                    <th style={{ width: '60px' }}>Time</th>
+                    <th style={{ width: columnWidths[0] }}>
+                        #
+                        <div className="resizer" onMouseDown={(e) => handleMouseDown(e, 0)} />
+                    </th>
+                    <th style={{ width: columnWidths[1] }}>
+                        Filename
+                        <div className="resizer" onMouseDown={(e) => handleMouseDown(e, 1)} />
+                    </th>
+                    <th style={{ width: columnWidths[2] }}>
+                        Title
+                        <div className="resizer" onMouseDown={(e) => handleMouseDown(e, 2)} />
+                    </th>
+                    <th style={{ width: columnWidths[3] }}>
+                        Artist
+                        <div className="resizer" onMouseDown={(e) => handleMouseDown(e, 3)} />
+                    </th>
+                    <th style={{ width: columnWidths[4] }}>
+                        Album
+                        <div className="resizer" onMouseDown={(e) => handleMouseDown(e, 4)} />
+                    </th>
+                    <th style={{ width: columnWidths[5] }}>
+                        Time
+                        <div className="resizer" onMouseDown={(e) => handleMouseDown(e, 5)} />
+                    </th>
                 </tr>
             </thead>
             <tbody>
