@@ -12,20 +12,82 @@ function App() {
   const [duration, setDuration] = useState(0);
   const [isTranscoding, setIsTranscoding] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [seekingFeedback, setSeekingFeedback] = useState<'forward' | 'backward' | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const currentBlobUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
+    const handleKeyDownGlobal = (e: KeyboardEvent) => {
+        // Only handle if app has files
+        if (files.length === 0) return;
+
+        const isArrowRight = e.key === 'ArrowRight' || e.code === 'ArrowRight';
+        const isArrowLeft = e.key === 'ArrowLeft' || e.code === 'ArrowLeft';
+        const isArrowUp = e.key === 'ArrowUp' || e.code === 'ArrowUp';
+        const isArrowDown = e.key === 'ArrowDown' || e.code === 'ArrowDown';
+        const isSpace = e.key === ' ' || e.code === 'Space';
+        const isBackspace = e.key === 'Backspace';
+
+        if (isArrowRight) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (audioRef.current) {
+                const newTime = Math.min(audioRef.current.currentTime + 3, audioRef.current.duration);
+                audioRef.current.currentTime = newTime;
+                setCurrentTime(newTime);
+                setSeekingFeedback('forward');
+                setTimeout(() => setSeekingFeedback(null), 300);
+            }
+        } else if (isArrowLeft) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (audioRef.current) {
+                const newTime = Math.max(audioRef.current.currentTime - 3, 0);
+                audioRef.current.currentTime = newTime;
+                setCurrentTime(newTime);
+                setSeekingFeedback('backward');
+                setTimeout(() => setSeekingFeedback(null), 300);
+            }
+        } else if (isArrowDown) {
+            e.preventDefault();
+            e.stopPropagation();
+            setSelectedIndex(prev => Math.min(prev + 1, files.length - 1));
+        } else if (isArrowUp) {
+            e.preventDefault();
+            e.stopPropagation();
+            setSelectedIndex(prev => Math.max(prev - 1, 0));
+        } else if (isSpace) {
+            e.preventDefault();
+            e.stopPropagation();
+            togglePlayPause();
+        } else if (isBackspace) {
+            e.preventDefault();
+            e.stopPropagation();
+            handleBackspace();
+        }
+    };
+
     const preventDefault = (e: Event) => e.preventDefault();
     window.addEventListener('dragover', preventDefault);
     window.addEventListener('drop', preventDefault);
-    window.addEventListener('keydown', handleKeyDown);
+    
+    // Register on document for maximum coverage, capture: true to win over native sliders
+    document.addEventListener('keydown', handleKeyDownGlobal, true);
+
     return () => {
       window.removeEventListener('dragover', preventDefault);
       window.removeEventListener('drop', preventDefault);
-      window.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('keydown', handleKeyDownGlobal, true);
     };
-  }, [files, selectedIndex]);
+  }, [files, selectedIndex, isPlaying]); // Depend on state to ensure fresh closure
+
+  useEffect(() => {
+    // Focus the container on mount to ensure key events are captured
+    if (containerRef.current) {
+        containerRef.current.focus();
+    }
+  }, []);
 
   useEffect(() => {
     if (selectedIndex >= 0 && selectedIndex < files.length && audioRef.current) {
@@ -87,64 +149,44 @@ function App() {
       }
   };
 
-  const handleKeyDown = (e: KeyboardEvent) => {
-    if (files.length === 0) return;
+  const handleBackspace = () => {
+    const file = files[selectedIndex];
+    if (!file) return;
 
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setSelectedIndex(prev => Math.min(prev + 1, files.length - 1));
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setSelectedIndex(prev => Math.max(prev - 1, 0));
-    } else if (e.key === ' ') {
-        e.preventDefault();
-        if (audioRef.current) {
-            if (audioRef.current.paused) audioRef.current.play();
-            else audioRef.current.pause();
-        }
-    } else if (e.key === 'Backspace') {
-        e.preventDefault();
-        const file = files[selectedIndex];
-        if (!file) return;
-
-        if (file.isDeleted) {
-            // Restore
-            window.electronAPI.restoreFile(file.path).then(result => {
-                if (result.success && result.newPath) {
-                    setFiles(prev => {
-                        const newFiles = [...prev];
-                        newFiles[selectedIndex] = { 
-                            ...file, 
-                            path: result.newPath!, 
-                            isDeleted: false 
-                        };
-                        return newFiles;
-                    });
-                } else {
-                    console.error("Failed to restore:", result.error);
-                }
-            });
-        } else {
-            // Soft Delete
-            window.electronAPI.softDeleteFile(file.path).then(result => {
-                if (result.success && result.newPath) {
-                    setFiles(prev => {
-                        const newFiles = [...prev];
-                        newFiles[selectedIndex] = { 
-                            ...file, 
-                            path: result.newPath!, 
-                            isDeleted: true 
-                        };
-                        return newFiles;
-                    });
-                    // Optional: Auto-advance selection? The user didn't ask for it, 
-                    // but usually you might want to. 
-                    // Sticking to spec: just gray out.
-                } else {
-                    console.error("Failed to delete:", result.error);
-                }
-            });
-        }
+    if (file.isDeleted) {
+        // Restore
+        window.electronAPI.restoreFile(file.path).then(result => {
+            if (result.success && result.newPath) {
+                setFiles(prev => {
+                    const newFiles = [...prev];
+                    newFiles[selectedIndex] = { 
+                        ...file, 
+                        path: result.newPath!, 
+                        isDeleted: false 
+                    };
+                    return newFiles;
+                });
+            } else {
+                console.error("Failed to restore:", result.error);
+            }
+        });
+    } else {
+        // Soft Delete
+        window.electronAPI.softDeleteFile(file.path).then(result => {
+            if (result.success && result.newPath) {
+                setFiles(prev => {
+                    const newFiles = [...prev];
+                    newFiles[selectedIndex] = { 
+                        ...file, 
+                        path: result.newPath!, 
+                        isDeleted: true 
+                    };
+                    return newFiles;
+                });
+            } else {
+                console.error("Failed to delete:", result.error);
+            }
+        });
     }
   };
 
@@ -205,10 +247,12 @@ function App() {
 
   return (
     <div 
+        ref={containerRef}
         className="container"
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
+        tabIndex={0}
     >
       <div className="header-compact">
           <h1>Music Filter</h1>
@@ -238,6 +282,11 @@ function App() {
                 />
                 <span className="time-display">{formatDuration(duration)}</span>
             </div>
+            {seekingFeedback && (
+                <div className={`seeking-feedback ${seekingFeedback}`}>
+                    {seekingFeedback === 'forward' ? '+3s' : '-3s'}
+                </div>
+            )}
           </div>
 
           <audio 
