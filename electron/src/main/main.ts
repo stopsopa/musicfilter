@@ -150,6 +150,15 @@ app.whenReady().then(() => {
     shell.openExternal(url);
   });
 
+  ipcMain.on('reveal-in-finder', (_event, filePath: string) => {
+    shell.showItemInFolder(filePath);
+  });
+
+  ipcMain.on('copy-to-clipboard', (_event, text: string) => {
+    const { clipboard } = require('electron');
+    clipboard.writeText(text);
+  });
+
   createWindow();
 
   app.on("activate", () => {

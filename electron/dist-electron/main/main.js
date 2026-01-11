@@ -140,6 +140,13 @@ app.whenReady().then(() => {
     ipcMain.on('open-external', (_event, url) => {
         shell.openExternal(url);
     });
+    ipcMain.on('reveal-in-finder', (_event, filePath) => {
+        shell.showItemInFolder(filePath);
+    });
+    ipcMain.on('copy-to-clipboard', (_event, text) => {
+        const { clipboard } = require('electron');
+        clipboard.writeText(text);
+    });
     createWindow();
     app.on("activate", () => {
         if (BrowserWindow.getAllWindows().length === 0) {

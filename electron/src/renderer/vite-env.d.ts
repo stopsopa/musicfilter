@@ -8,6 +8,8 @@ interface ElectronAPI {
   softDeleteFile: (path: string) => Promise<{ success: boolean; newPath?: string; error?: string }>;
   restoreFile: (path: string) => Promise<{ success: boolean; newPath?: string; error?: string }>;
   openExternal: (url: string) => void;
+  revealInFinder: (path: string) => void;
+  copyToClipboard: (text: string) => void;
 }
 
 interface Window {

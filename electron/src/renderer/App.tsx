@@ -13,6 +13,7 @@ function App() {
   const [isTranscoding, setIsTranscoding] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isFocused, setIsFocused] = useState(true);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; index: number } | null>(null);
   const [seekingFeedback, setSeekingFeedback] = useState<'forward' | 'backward' | null>(null);
   const [columnWidths, setColumnWidths] = useState<number[]>([40, 300, 200, 150, 150, 60]);
   const resizingColumn = useRef<{ index: number; startX: number; startWidth: number } | null>(null);
@@ -97,6 +98,12 @@ function App() {
     if (containerRef.current) {
         containerRef.current.focus();
     }
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = () => setContextMenu(null);
+    window.addEventListener('click', handleClickOutside);
+    return () => window.removeEventListener('click', handleClickOutside);
   }, []);
 
   useEffect(() => {
@@ -281,6 +288,30 @@ function App() {
     document.removeEventListener('mouseup', handleMouseUp);
   };
 
+  const handleContextMenu = (e: React.MouseEvent, index: number) => {
+    e.preventDefault();
+    setSelectedIndex(index);
+    
+    // Estimated dimensions for the context menu
+    const menuWidth = 160;
+    const menuHeight = 120;
+    
+    let x = e.clientX;
+    let y = e.clientY;
+    
+    // Flip horizontal if it goes off-screen
+    if (x + menuWidth > window.innerWidth) {
+        x -= menuWidth;
+    }
+    
+    // Flip vertical if it goes off-screen
+    if (y + menuHeight > window.innerHeight) {
+        y -= menuHeight;
+    }
+    
+    setContextMenu({ x, y, index });
+  };
+
   return (
     <div 
         ref={containerRef}
@@ -349,7 +380,10 @@ function App() {
       )}
 
       <div className="file-list-container">
-        <table className="file-table">
+        <table 
+            className="file-table"
+            style={{ minWidth: columnWidths.reduce((a, b) => a + b, 0) }}
+        >
             <thead>
                 <tr>
                     <th style={{ width: columnWidths[0] }}>
@@ -385,6 +419,7 @@ function App() {
                         id={`file-row-${index}`}
                         className={`${selectedIndex === index ? 'selected' : ''} ${file.isDeleted ? 'deleted-row' : ''}`}
                         onClick={() => setSelectedIndex(index)}
+                        onContextMenu={(e) => handleContextMenu(e, index)}
                     >
                         <td className="index-col">{index + 1}</td>
                         <td className="filename-col" title={file.name}>{file.name}</td>
@@ -416,6 +451,39 @@ function App() {
               </a>
           </div>
       </footer>
+
+      {contextMenu && (
+          <div 
+            className="context-menu" 
+            style={{ top: contextMenu.y, left: contextMenu.x }}
+            onClick={(e) => e.stopPropagation()}
+          >
+              <div className="context-menu-item" onClick={() => {
+                  if (contextMenu) {
+                      window.electronAPI.revealInFinder(files[contextMenu.index].path);
+                      setContextMenu(null);
+                  }
+              }}>
+                  Reveal in Finder
+              </div>
+              <div className="context-menu-item" onClick={() => {
+                  if (contextMenu) {
+                      window.electronAPI.copyToClipboard(files[contextMenu.index].path);
+                      setContextMenu(null);
+                  }
+              }}>
+                  Copy Full Location
+              </div>
+              <div className="context-menu-item" onClick={() => {
+                  if (contextMenu) {
+                      window.electronAPI.copyToClipboard(files[contextMenu.index].name);
+                      setContextMenu(null);
+                  }
+              }}>
+                  Copy Filename
+              </div>
+          </div>
+      )}
     </div>
   );
 }

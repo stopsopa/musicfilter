@@ -19,5 +19,7 @@ electron_1.contextBridge.exposeInMainWorld('electronAPI', {
     readFileBuffer: (path) => electron_1.ipcRenderer.invoke('read-file-buffer', path),
     softDeleteFile: (path) => electron_1.ipcRenderer.invoke('soft-delete-file', path),
     restoreFile: (path) => electron_1.ipcRenderer.invoke('restore-file', path),
-    openExternal: (url) => electron_1.ipcRenderer.send('open-external', url)
+    openExternal: (url) => electron_1.ipcRenderer.send('open-external', url),
+    revealInFinder: (path) => electron_1.ipcRenderer.send('reveal-in-finder', path),
+    copyToClipboard: (text) => electron_1.ipcRenderer.send('copy-to-clipboard', text)
 });
