@@ -84,14 +84,20 @@ jobs:
           TAG_NAME=${{ inputs.tag_name || github.ref_name }}
           gh release upload $TAG_NAME package.json --clobber
 
-      - name: 📢 Release Summary
-        if: success()
-        shell: bash
+  summary:
+    name: 📢 Release Summary
+    needs: build
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: 📢 Summary
         run: |
           TAG_NAME=${{ inputs.tag_name || github.ref_name }}
           REPO_URL="https://github.com/${{ github.repository }}"
           RELEASE_URL="$REPO_URL/releases/tag/$TAG_NAME"
 
-          echo "### 🚀 ${{ matrix.os }} Release Published Successfully!" >> $GITHUB_STEP_SUMMARY
+          echo "### 🚀 Release Build Pipeline Complete!" >> $GITHUB_STEP_SUMMARY
+          echo "All builds (macOS and Windows) have finished." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
           echo "You can view the release and download the artifacts here:" >> $GITHUB_STEP_SUMMARY
           echo "👉 [**$TAG_NAME**]($RELEASE_URL)" >> $GITHUB_STEP_SUMMARY
