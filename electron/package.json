@@ -24,14 +24,30 @@
     },
     "mac": {
       "category": "public.app-category.music",
-      "target": {
-        "target": "dmg",
-        "arch": [
-          "universal"
-        ]
-      },
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal",
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
       "hardenedRuntime": true,
       "gatekeeperAssess": false
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64",
+            "arm64",
+            "ia32"
+          ]
+        }
+      ]
     },
     "files": [
       "dist-electron/**/*",

@@ -3,5 +3,6 @@
 # To be safe, we can just run the electron executable against the current directory,
 # which uses package.json 'main' entry point (dist-electron/main/main.js).
 
+/bin/bash compile.sh
 npx electron .
 
