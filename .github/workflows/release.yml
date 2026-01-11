@@ -19,16 +19,21 @@ permissions:
   contents: write
 
 jobs:
-  build-mac:
-    name: 🏗️ Build (macOS)
-    runs-on: macos-latest
+  build:
+    name: 🏗️ Build (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - name: 🔍 Audit
+        shell: bash
         run: |
           echo "### Release Context ###"
-          echo "Event {{ github.event_name }}: >${{ github.event_name }}<"
-          echo "Tag {{ inputs.tag_name }}:   >${{ inputs.tag_name }}<"
-          echo "Ref {{ github.ref_name }}:   >${{ github.ref_name }}<"
+          echo "Event ${{ github.event_name }}: >${{ github.event_name }}<"
+          echo "Tag ${{ inputs.tag_name }}:   >${{ inputs.tag_name }}<"
+          echo "Ref ${{ github.ref_name }}:   >${{ github.ref_name }}<"
           echo "ENV Path: $GITHUB_ENV"
           env | grep -E "STEP_|GITHUB_" | sort || echo "No markers yet"
 
@@ -45,6 +50,7 @@ jobs:
 
       - name: 📦 Install, Build & Sync
         working-directory: ./electron
+        shell: bash
         run: |
           npm ci
 
@@ -60,44 +66,32 @@ jobs:
         working-directory: ./electron
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        # MAGIC STEP 2: Publish to GitHub
-        # - electron-builder reads the version from package.json (set in step above)
-        # - It packages the app (creating .dmg because of "mac": { "target": "dmg" } in package.json)
-        # - It uploads the .dmg to the EXISTING GitHub Release that matches this version.
-        # Note: The Release MUST already exist (created by semantic-release in the previous workflow)
-        # for this step to succeed.
-        run: npx electron-builder --mac --publish always
-        # warning: in order to avoid issue in this step:
-        # GitHub release not created  reason=existing type not compatible with publishing type tag=v1.4.1 version=1.4.1 existingType=release publishingType=draft
-        # it is needed to add to package.json "publish": { "provider": "github", "releaseType": "release" }
+        shell: bash
+        run: |
+          if [ "${{ matrix.os }}" = "macos-latest" ]; then
+            npx electron-builder --mac --publish always
+          else
+            npx electron-builder --win --publish always
+          fi
 
       - name: 📤 Upload Additional Assets
+        if: matrix.os == 'macos-latest'
         working-directory: ./electron
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG_NAME=${{ inputs.tag_name || github.ref_name }}
           gh release upload $TAG_NAME package.json --clobber
-          # gh release upload $TAG_NAME .github/workflows/* --clobber
-
-      # Failsafe: Upload artifact to Actions Run as well
-      # This ensures you can access the binary even if the Github Release upload fails
-      # WARNING: this will upload to action page not to release page - so we don't need that here
-      # - name: Upload Release Artifact (Backup)
-      #   if: always()
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: release-dmg
-      #     path: electron/release/*.dmg
-      #     retention-days: 5
 
       - name: 📢 Release Summary
         if: success()
+        shell: bash
         run: |
           TAG_NAME=${{ inputs.tag_name || github.ref_name }}
           REPO_URL="https://github.com/${{ github.repository }}"
           RELEASE_URL="$REPO_URL/releases/tag/$TAG_NAME"
 
-          echo "### 🚀 Release Published Successfully!" >> $GITHUB_STEP_SUMMARY
-          echo "You can view the release and download the DMG here:" >> $GITHUB_STEP_SUMMARY
+          echo "### 🚀 ${{ matrix.os }} Release Published Successfully!" >> $GITHUB_STEP_SUMMARY
+          echo "You can view the release and download the artifacts here:" >> $GITHUB_STEP_SUMMARY
           echo "👉 [**$TAG_NAME**]($RELEASE_URL)" >> $GITHUB_STEP_SUMMARY
