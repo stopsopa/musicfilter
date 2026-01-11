@@ -120,6 +120,16 @@ app.whenReady().then(() => {
             }
             const originalPath = path.join(originalDir, filename);
             fs.renameSync(filePath, originalPath);
+            // Check if the delete folder is now empty and remove it if so
+            try {
+                const filesInDeleteDir = fs.readdirSync(deleteDir);
+                if (filesInDeleteDir.length === 0) {
+                    fs.rmdirSync(deleteDir);
+                }
+            }
+            catch (dirErr) {
+                console.error('Error cleaning up delete directory:', dirErr);
+            }
             return { success: true, newPath: originalPath };
         }
         catch (error) {
