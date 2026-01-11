@@ -34,6 +34,7 @@ function createWindow() {
   const win = new BrowserWindow({
     width: 1300,
     height: 600,
+    icon: path.join(__dirname, "../../public/icon.png"),
     webPreferences: {
       preload: path.join(__dirname, "../preload/preload.js"),
       nodeIntegration: false, // Security best practice when using contextIsolation
@@ -127,6 +128,17 @@ app.whenReady().then(() => {
         const originalPath = path.join(originalDir, filename);
         
         fs.renameSync(filePath, originalPath);
+
+        // Check if the delete folder is now empty and remove it if so
+        try {
+            const filesInDeleteDir = fs.readdirSync(deleteDir);
+            if (filesInDeleteDir.length === 0) {
+                fs.rmdirSync(deleteDir);
+            }
+        } catch (dirErr) {
+            console.error('Error cleaning up delete directory:', dirErr);
+        }
+
         return { success: true, newPath: originalPath };
     } catch (error) {
         console.error('Error restoring file:', filePath, error);
@@ -144,7 +156,5 @@ app.whenReady().then(() => {
 });
 
 app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
-    app.quit();
-  }
+  app.quit();
 });

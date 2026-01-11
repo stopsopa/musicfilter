@@ -31,6 +31,7 @@ function createWindow() {
     const win = new BrowserWindow({
         width: 1300,
         height: 600,
+        icon: path.join(__dirname, "../../public/icon.png"),
         webPreferences: {
             preload: path.join(__dirname, "../preload/preload.js"),
             nodeIntegration: false, // Security best practice when using contextIsolation
@@ -134,7 +135,5 @@ app.whenReady().then(() => {
     });
 });
 app.on("window-all-closed", () => {
-    if (process.platform !== "darwin") {
-        app.quit();
-    }
+    app.quit();
 });
