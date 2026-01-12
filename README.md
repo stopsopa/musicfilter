@@ -10,6 +10,8 @@ Just go to [Github releases](../../releases), pick the latest release, and downl
 
 Music Filter is a lightweight desktop utility designed for efficient music library curation. It allows users to quickly preview, organize, and filter large collections of MP3 files through a streamlined, keyboard-driven interface.
 
+![Image](https://github.com/user-attachments/assets/9442183d-3c50-4a52-ac7b-a90261434df3)
+
 ## Key Features
 
 - **Drag & Drop**: Effortlessly load individual MP3 files or entire folders.
