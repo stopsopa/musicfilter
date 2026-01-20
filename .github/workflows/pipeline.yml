@@ -75,12 +75,41 @@ jobs:
           env | grep -E "STEP_|GITHUB_|RELEASE_TAG" | sort
 
   # STEP 2a: Test Build (Optional Fork)
-  # Pauses on 'test' environment.
-  test-build:
-    name: 🍴 Test Build - Fork test
+  # Gate: Test Approval
+  # This job acts as a "Gate" for the Test environment.
+  # It has `continue-on-error: true`, so if you:
+  # 1. Reject the deployment review
+  # 2. Let the review timer expire
+  # This job will "Fail" (Red) but NOT fail the entire workflow.
+  # The dependent job (test-build) will check for the 'approved' output and SKIP if not present.
+  test-gate:
+    name: 🛡️ Test Gate
     needs: test
     runs-on: ubuntu-latest
-    environment: test # <--- Pauses here!
+    environment: test
+    continue-on-error: true
+    outputs:
+      approved: ${{ steps.check.outputs.approved }}
+    steps:
+      - name: ✅ Mark Approved
+        id: check
+        run: echo "approved=true" >> $GITHUB_OUTPUT
+      - run: echo "Test Gate - Approved"
+
+  test-build:
+    name: 🍴 Test Build - Fork test
+    needs:
+      - test # WARNING: this will actually generate extra lines on the graph - don't be alarmed: https://i.imgur.com/EvTAriN.png & https://github.com/user-attachments/assets/6841fd35-72eb-4c56-bb4e-0836354b411d
+      - test-gate
+    if: needs.test-gate.outputs.approved == 'true'
+    # LOGIC SUMMARY:
+    # 1. If 'test-gate' FAILS (timeout/rejection), it turns Red but the workflow stays Green (due to continue-on-error).
+    # 2. 'test-gate' failure means the 'approved' output is NEVER set.
+    # 3. This job checks for 'approved' == 'true'. Since it's missing, this condition evaluates to FALSE.
+    # 4. Result: This job is SKIPPED (Grey), not Failed.
+    # 5. Conclusion: The pipeline stops here gracefully without marking the run as Failed.
+    runs-on: ubuntu-latest
+    # environment: test # Removed: Handled by gate <--- that would normally be uncommented if test-gate wouldn't be defined
     # CROSS-JOB STATE (The "Catcher"):
     # Since this is a fresh machine, we must 'catch' the output from the 'test' job
     # and map it back into this job's environment.
@@ -95,8 +124,22 @@ jobs:
       - run: echo "This is a dummy test deployment triggered by approval."
 
   # STEP 2b: Dev/QA Build (Main Fork)
-  # Pauses on 'development' environment.
-  #
+  # Gate: QA Approval
+  # Similar to test-gate: Stops the branch gracefully on Rejection/Timeout.
+  qa-gate:
+    name: 🛡️ QA Gate
+    needs: test
+    runs-on: ubuntu-latest
+    environment: development
+    continue-on-error: true
+    outputs:
+      approved: ${{ steps.check.outputs.approved }}
+    steps:
+      - name: ✅ Mark Approved
+        id: check
+        run: echo "approved=true" >> $GITHUB_OUTPUT
+      - run: echo "QA Gate - Approved"
+
   # 🚨 CONFIGURATION REQUIRED:
   # You MUST configure TWO environments in GitHub Repo Settings > Environments:
   #
@@ -111,13 +154,22 @@ jobs:
   #    - Save protection rules
   qa-build:
     name: 🚧 QA Build (${{ matrix.os }})
-    needs: test
+    needs:
+      - test # WARNING: this will actually generate extra lines on the graph - don't be alarmed: https://i.imgur.com/EvTAriN.png & https://github.com/user-attachments/assets/6841fd35-72eb-4c56-bb4e-0836354b411d
+      - qa-gate
+    if: needs.qa-gate.outputs.approved == 'true'
+    # LOGIC SUMMARY:
+    # 1. If 'qa-gate' FAILS (timeout/rejection), it turns Red but the workflow stays Green (due to continue-on-error).
+    # 2. 'qa-gate' failure means the 'approved' output is NEVER set.
+    # 3. This job checks for 'approved' == 'true'. Since it's missing, this condition evaluates to FALSE.
+    # 4. Result: This job is SKIPPED (Grey), not Failed.
+    # 5. Conclusion: The pipeline stops here gracefully without marking the run as Failed.
     strategy:
       fail-fast: false
       matrix:
         os: [macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
-    environment: development # <--- Pauses here!
+    # environment: development # Removed: Handled by gate
     # CROSS-JOB STATE (The "Catcher"):
     # Mapping the test result here so the Audit dump below can see it.
     env:
@@ -184,12 +236,36 @@ jobs:
           retention-days: 1
 
   # STEP 3: The "Gatekeeper" for Production
-  # Pauses on 'production' environment.
+  # Gate: Production Approval
+  # Similar to qa-gate: Stops the branch gracefully on Rejection/Timeout.
+  bump-gate:
+    name: 🛡️ Bump Gate
+    needs: qa-build
+    runs-on: ubuntu-latest
+    environment: production
+    continue-on-error: true
+    outputs:
+      approved: ${{ steps.check.outputs.approved }}
+    steps:
+      - name: ✅ Mark Approved
+        id: check
+        run: echo "approved=true" >> $GITHUB_OUTPUT
+      - run: echo "Bump Gate - Approved"
+
   bump:
     name: 🚀 Bump Version (Prod)
-    needs: qa-build # <--- Depends on QA passing!
+    needs:
+      - qa-build # <--- Depends on QA passing!
+      - bump-gate
+    if: needs.bump-gate.outputs.approved == 'true'
+    # LOGIC SUMMARY:
+    # 1. If 'bump-gate' FAILS (timeout/rejection), it turns Red but the workflow stays Green (due to continue-on-error).
+    # 2. 'bump-gate' failure means the 'approved' output is NEVER set.
+    # 3. This job checks for 'approved' == 'true'. Since it's missing, this condition evaluates to FALSE.
+    # 4. Result: This job is SKIPPED (Grey), not Failed.
+    # 5. Conclusion: The pipeline stops here gracefully without marking the run as Failed.
     runs-on: ubuntu-latest
-    environment: production # <--- Pauses here!
+    # environment: production # Removed: Handled by gate
     defaults:
       run:
         working-directory: ./electron
