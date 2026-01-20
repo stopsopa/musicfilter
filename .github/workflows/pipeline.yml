@@ -83,6 +83,9 @@ jobs:
   # This job will "Fail" (Red) but NOT fail the entire workflow.
   # The dependent job (test-build) will check for the 'approved' output and SKIP if not present.
   test-gate:
+    # https://github.com/user-attachments/assets/b26e977e-cb56-4d89-9f8d-e3ad35b1197f
+    # this is to don't get email 30 days after nobody triggered environment approval for consecutive steps
+    # more about this gate trick: https://github.com/stopsopa/musicfilter/commit/b18add75efb6f6f3cd6af12551cd5ebfccc25d38
     name: 🛡️ Test Gate
     needs: test
     runs-on: ubuntu-latest
@@ -126,7 +129,10 @@ jobs:
   # STEP 2b: Dev/QA Build (Main Fork)
   # Gate: QA Approval
   # Similar to test-gate: Stops the branch gracefully on Rejection/Timeout.
-  qa-gate:
+  qa-gate: 
+    # https://github.com/user-attachments/assets/b26e977e-cb56-4d89-9f8d-e3ad35b1197f
+    # this is to don't get email 30 days after nobody triggered environment approval for consecutive steps
+    # more about this gate trick: https://github.com/stopsopa/musicfilter/commit/b18add75efb6f6f3cd6af12551cd5ebfccc25d38
     name: 🛡️ QA Gate
     needs: test
     runs-on: ubuntu-latest
